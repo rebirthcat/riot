@@ -32,12 +32,24 @@ type Ranker struct {
 		fields map[string]interface{}
 		docs   map[string]bool
 		// new
-		content map[string]string
-		attri   map[string]interface{}
+		//content map[string]string
+		//attri   map[string]interface{}
 	}
 
 	idOnly      bool
 	initialized bool
+}
+
+func (ranker *Ranker) SetFields(fields map[string]interface{}) {
+	ranker.lock.Lock()
+	ranker.lock.fields=fields
+	ranker.lock.Unlock()
+}
+
+func (ranker *Ranker)SetDocs(docs map[string]bool)  {
+	ranker.lock.Lock()
+	ranker.lock.docs=docs
+	ranker.lock.Unlock()
 }
 
 // Init init ranker
@@ -54,11 +66,11 @@ func (ranker *Ranker) Init(onlyID ...bool) {
 	ranker.lock.fields = make(map[string]interface{})
 	ranker.lock.docs = make(map[string]bool)
 
-	if !ranker.idOnly {
-		// new
-		ranker.lock.content = make(map[string]string)
-		ranker.lock.attri = make(map[string]interface{})
-	}
+	//if !ranker.idOnly {
+	//	// new
+	//	ranker.lock.content = make(map[string]string)
+	//	ranker.lock.attri = make(map[string]interface{})
+	//}
 }
 
 // AddDoc add doc
@@ -74,17 +86,17 @@ func (ranker *Ranker) AddDoc(
 	ranker.lock.fields[docId] = fields
 	ranker.lock.docs[docId] = true
 
-	if !ranker.idOnly {
-		// new
-		if len(content) > 0 {
-			ranker.lock.content[docId] = content[0].(string)
-		}
-
-		if len(content) > 1 {
-			ranker.lock.attri[docId] = content[1]
-			// ranker.lock.attri[docId] = attri
-		}
-	}
+	//if !ranker.idOnly {
+	//	// new
+	//	if len(content) > 0 {
+	//		ranker.lock.content[docId] = content[0].(string)
+	//	}
+	//
+	//	if len(content) > 1 {
+	//		ranker.lock.attri[docId] = content[1]
+	//		// ranker.lock.attri[docId] = attri
+	//	}
+	//}
 
 	ranker.lock.Unlock()
 }
@@ -99,11 +111,11 @@ func (ranker *Ranker) RemoveDoc(docId string) {
 	delete(ranker.lock.fields, docId)
 	delete(ranker.lock.docs, docId)
 
-	if !ranker.idOnly {
-		// new
-		delete(ranker.lock.content, docId)
-		delete(ranker.lock.attri, docId)
-	}
+	//if !ranker.idOnly {
+	//	// new
+	//	delete(ranker.lock.content, docId)
+	//	delete(ranker.lock.attri, docId)
+	//}
 
 	ranker.lock.Unlock()
 }
@@ -184,8 +196,8 @@ func (ranker *Ranker) rankOutDocs(docs []types.IndexedDoc, options types.RankOpt
 		if _, ok := ranker.lock.docs[d.DocId]; ok {
 
 			fs := ranker.lock.fields[d.DocId]
-			content := ranker.lock.content[d.DocId]
-			attri := ranker.lock.attri[d.DocId]
+			//content := ranker.lock.content[d.DocId]
+			//attri := ranker.lock.attri[d.DocId]
 			ranker.lock.RUnlock()
 
 			// 计算评分并剔除没有分值的文档
@@ -204,8 +216,8 @@ func (ranker *Ranker) rankOutDocs(docs []types.IndexedDoc, options types.RankOpt
 							ScoredID: scoredID,
 							// new
 							Fields:  fs,
-							Content: content,
-							Attri:   attri,
+							//Content: content,
+							//Attri:   attri,
 						})
 				}
 				numDocs++

@@ -65,6 +65,31 @@ type Indexer struct {
 	docTokenLens map[string]float32
 }
 
+func (indexer *Indexer) SetNumDocs(numDocs uint64) {
+	indexer.numDocs=numDocs
+}
+func (indexer *Indexer) SetTotalTokenLen(totalTokenLen float32) {
+	indexer.totalTokenLen=totalTokenLen
+}
+
+func (indexer *Indexer) SetdocTokenLens(docTokenLens  map[string]float32) {
+	indexer.docTokenLens=docTokenLens
+}
+
+
+func (indexer *Indexer) SetTable(table map[string]*KeywordIndices)  {
+	indexer.tableLock.Lock()
+	indexer.tableLock.table=table
+	indexer.tableLock.Unlock()
+}
+
+func (indexer *Indexer)SetDocsState(docsState map[string]int)  {
+	indexer.tableLock.Lock()
+	indexer.tableLock.docsState=docsState
+	indexer.tableLock.Unlock()
+}
+
+
 // KeywordIndices 反向索引表的一行，收集了一个搜索键出现的所有文档，按照DocId从小到大排序。
 type KeywordIndices struct {
 	// 下面的切片是否为空，取决于初始化时IndexType的值

@@ -32,10 +32,10 @@ import (
 
 	"sync/atomic"
 
-	"github.com/go-ego/riot/core"
-	"github.com/go-ego/riot/store"
-	"github.com/go-ego/riot/types"
-	"github.com/go-ego/riot/utils"
+	"riot/core"
+	"riot/store"
+	"riot/types"
+	"riot/utils"
 
 	"github.com/go-ego/gse"
 	"github.com/go-ego/murmur"
@@ -84,7 +84,8 @@ type Engine struct {
 	segmenter  gse.Segmenter
 	loaded     bool
 	stopTokens StopTokens
-	dbs        []store.Store
+	dbForwards        []store.Store
+	dbReverses         []store.Store
 
 	// 建立索引器使用的通信通道
 	segmenterChan         chan segmenterReq
@@ -98,8 +99,14 @@ type Engine struct {
 	rankerRemoveDocChans []chan rankerRemoveDocReq
 
 	// 建立持久存储使用的通信通道
-	storeIndexDocChans []chan storeIndexDocReq
-	storeInitChan      chan bool
+	//storeIndexDocChans []chan storeIndexDocReq
+	//storeInitChan      chan bool
+
+	storeIndexRecoverChan 	chan bool
+	storeRevertIndexChans     []chan storeRevertIndexReq
+//	storeIndexRemoveChans  []chan storeRevertIndexReq
+	storeRankerIndexChans	   []chan storeRankerIndexReq
+//	storeRankerRemoveChan  []chan storeRankerIndexReq
 }
 
 // Indexer initialize the indexer channel
@@ -150,15 +157,26 @@ func (engine *Engine) Ranker(options types.EngineOpts) {
 
 // InitStore initialize the persistent store channel
 func (engine *Engine) InitStore() {
-	engine.storeIndexDocChans = make(
-		[]chan storeIndexDocReq, engine.initOptions.StoreShards)
+	//engine.storeIndexDocChans = make(
+	//	[]chan storeIndexDocReq, engine.initOptions.StoreShards)
+	//
+	//for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
+	//	engine.storeIndexDocChans[shard] = make(
+	//		chan storeIndexDocReq)
+	//}
+	//engine.storeInitChan = make(
+	//	chan bool, engine.initOptions.StoreShards)
+	engine.storeIndexRecoverChan=make(chan bool,engine.initOptions.StoreShards*2)
+	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
+		engine.storeRevertIndexChans[shard]=make(chan storeRevertIndexReq)
+	}
 
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		engine.storeIndexDocChans[shard] = make(
-			chan storeIndexDocReq)
+		engine.storeRankerIndexChans[shard]=make(chan storeRankerIndexReq)
 	}
-	engine.storeInitChan = make(
-		chan bool, engine.initOptions.StoreShards)
+
+
+
 }
 
 // CheckMem check the memory when the memory is larger
@@ -191,26 +209,39 @@ func (engine *Engine) Store() {
 	}
 
 	// 打开或者创建数据库
-	engine.dbs = make([]store.Store, engine.initOptions.StoreShards)
+	engine.dbForwards = make([]store.Store, engine.initOptions.StoreShards)
+	engine.dbReverses = make([]store.Store, engine.initOptions.StoreShards)
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		dbPath := engine.initOptions.StoreFolder + "/" +
-			StoreFilePrefix + "." + strconv.Itoa(shard)
+		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
+			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
 
-		db, err := store.OpenStore(dbPath, engine.initOptions.StoreEngine)
-		if db == nil || err != nil {
-			log.Fatal("Unable to open database ", dbPath, ": ", err)
+		dbforward, err := store.OpenStore(dbPathForwardIndex, engine.initOptions.StoreEngine)
+		if dbforward == nil || err != nil {
+			log.Fatal("Unable to open database ", dbPathForwardIndex, ": ", err)
 		}
-		engine.dbs[shard] = db
+		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
+			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
+
+		dbreverse, err := store.OpenStore(dbPathReverseIndex, engine.initOptions.StoreEngine)
+		if dbreverse == nil || err != nil {
+			log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", err)
+		}
+		engine.dbForwards[shard] = dbforward
+		engine.dbReverses[shard] = dbreverse
+	}
+	// 从数据库中恢复
+	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
+		go engine.storeRecoverForwards(shard)
 	}
 
 	// 从数据库中恢复
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		go engine.storeInit(shard)
+		go engine.storeRecoverReverses(shard)
 	}
 
 	// 等待恢复完成
-	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		<-engine.storeInitChan
+	for shard := 0; shard < engine.initOptions.StoreShards*2; shard++ {
+		<-engine.storeIndexRecoverChan
 	}
 
 	for {
@@ -227,15 +258,26 @@ func (engine *Engine) Store() {
 
 	// 关闭并重新打开数据库
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		engine.dbs[shard].Close()
-		dbPath := engine.initOptions.StoreFolder + "/" +
-			StoreFilePrefix + "." + strconv.Itoa(shard)
+		//engine.dbs[shard].Close()
+		engine.dbForwards[shard].Close()
+		engine.dbReverses[shard].Close()
 
-		db, err := store.OpenStore(dbPath, engine.initOptions.StoreEngine)
-		if db == nil || err != nil {
-			log.Fatal("Unable to open database ", dbPath, ": ", err)
+		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
+			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
+
+		dbforward, err := store.OpenStore(dbPathForwardIndex, engine.initOptions.StoreEngine)
+		if dbforward == nil || err != nil {
+			log.Fatal("Unable to open database ", dbPathForwardIndex, ": ", err)
 		}
-		engine.dbs[shard] = db
+		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
+			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
+
+		dbreverse, err := store.OpenStore(dbPathReverseIndex, engine.initOptions.StoreEngine)
+		if dbreverse == nil || err != nil {
+			log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", err)
+		}
+		engine.dbForwards[shard] = dbforward
+		engine.dbReverses[shard] = dbreverse
 	}
 
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
