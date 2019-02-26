@@ -67,7 +67,28 @@ type Indexer struct {
 	shardNumber int
 
 	////当反向索引被更新时接受请求的chan
-	storeAddRevertIndexChan     chan types.StoreRevertIndexReq
+	storeAddRevertIndexChan     chan StoreRevertIndexReq
+
+	storeAddForwardIndexChan    chan StoreForwardIndexReq
+}
+
+// KeywordIndices 反向索引表的一行，收集了一个搜索键出现的所有文档，按照DocId从小到大排序。
+type KeywordIndices struct {
+	// 下面的切片是否为空，取决于初始化时IndexType的值
+	docIds      []string  // 全部类型都有
+	frequencies []float32 // IndexType == FrequenciesIndex
+	locations   [][]int   // IndexType == LocsIndex
+}
+
+//在线持久化请求结构
+type StoreRevertIndexReq struct {
+	Token string
+	KeywordIndices *KeywordIndices
+}
+
+type StoreForwardIndexReq struct {
+	DocID string
+	DocTokenLen float32
 }
 
 func (indexer *Indexer) SetNumDocs(numDocs uint64) {
@@ -95,16 +116,8 @@ func (indexer *Indexer)SetDocsState(docsState map[string]int)  {
 }
 
 
-// KeywordIndices 反向索引表的一行，收集了一个搜索键出现的所有文档，按照DocId从小到大排序。
-type KeywordIndices struct {
-	// 下面的切片是否为空，取决于初始化时IndexType的值
-	docIds      []string  // 全部类型都有
-	frequencies []float32 // IndexType == FrequenciesIndex
-	locations   [][]int   // IndexType == LocsIndex
-}
-
 // Init 初始化索引器
-func (indexer *Indexer) Init(options types.IndexerOpts) {
+func (indexer *Indexer) Init(shard int,options types.IndexerOpts) {
 	if indexer.initialized == true {
 		log.Fatal("The Indexer can not be initialized twice.")
 	}
@@ -120,6 +133,9 @@ func (indexer *Indexer) Init(options types.IndexerOpts) {
 	indexer.removeCacheLock.removeCache = make(
 		[]string, indexer.initOptions.DocCacheSize*2)
 	indexer.docTokenLens = make(map[string]float32)
+	indexer.shardNumber=shard
+	indexer.storeAddForwardIndexChan=make(chan StoreForwardIndexReq)
+	indexer.storeAddRevertIndexChan=make(chan StoreRevertIndexReq)
 }
 
 // getDocId 从 KeywordIndices 中得到第i个文档的 DocId
@@ -233,6 +249,11 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 		if doc.TokenLen != 0 {
 			indexer.docTokenLens[doc.DocId] = float32(doc.TokenLen)
 			indexer.totalTokenLen += doc.TokenLen
+			//持久化
+			indexer.storeAddForwardIndexChan<-StoreForwardIndexReq{
+				DocID:doc.DocId,
+				DocTokenLen:doc.TokenLen,
+			}
 		}
 
 		docIdIsNew := true
@@ -275,16 +296,17 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indices.docIds = append(indices.docIds, "0")
 			copy(indices.docIds[position+1:], indices.docIds[position:])
 			indices.docIds[position] = doc.DocId
+			//发送至持久化
+			indexer.storeAddRevertIndexChan<-StoreRevertIndexReq{
+				Token:keyword.Text,
+				KeywordIndices:indices,
+			}
 		}
 
 		// 更新文章状态和总数
 		if docIdIsNew {
 			indexer.tableLock.docsState[doc.DocId] = 0
 			indexer.numDocs++
-		}
-
-		indexer.storeAddRevertIndexChan<-types.StoreRevertIndexReq{
-
 		}
 	}
 }

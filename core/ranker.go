@@ -38,7 +38,17 @@ type Ranker struct {
 
 	idOnly      bool
 	initialized bool
+	shardNumber int
+	storeAddRankerIndexChan	  chan StoreRankerIndexReq
 }
+
+//在线持久化请求结构体
+type StoreRankerIndexReq struct {
+	DocID string
+	DocExist bool
+	Field interface{}
+}
+
 
 func (ranker *Ranker) SetFields(fields map[string]interface{}) {
 	ranker.lock.Lock()
@@ -53,7 +63,7 @@ func (ranker *Ranker)SetDocs(docs map[string]bool)  {
 }
 
 // Init init ranker
-func (ranker *Ranker) Init(onlyID ...bool) {
+func (ranker *Ranker) Init(shard int,onlyID ...bool) {
 	if ranker.initialized == true {
 		log.Fatal("The Ranker can not be initialized twice.")
 	}

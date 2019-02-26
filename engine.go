@@ -108,10 +108,10 @@ type Engine struct {
 	//用来恢复ranker中的字段
 	storeRecoverRankerIndexChan 	chan bool
 
-	//当反向索引被更新时接受请求的chan
-	storeAddRevertIndexChans     []chan storeRevertIndexReq
-	//当ranker中的数据被更新是接受的chan
-	storeAddRankerIndexChans	   []chan storeRankerIndexReq
+	////当反向索引被更新时接受请求的chan
+	//storeAddRevertIndexChans     []chan storeRevertIndexReq
+	////当ranker中的数据被更新是接受的chan
+	//storeAddRankerIndexChans	   []chan storeRankerIndexReq
 }
 
 // Indexer initialize the indexer channel
@@ -165,13 +165,13 @@ func (engine *Engine) InitStore() {
 	engine.storeRecoverForwardIndexChan=make(chan bool,engine.initOptions.StoreShards)
 	engine.storeRecoverReverseIndexChan=make(chan bool,engine.initOptions.StoreShards)
 	engine.storeRecoverRankerIndexChan=make(chan bool,engine.initOptions.StoreShards)
-	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		engine.storeAddRevertIndexChans[shard]=make(chan storeRevertIndexReq)
-	}
+	//for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
+	//	engine.storeAddRevertIndexChans[shard]=make(chan storeRevertIndexReq)
+	//}
 
-	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		engine.storeAddRankerIndexChans[shard]=make(chan storeRankerIndexReq)
-	}
+	//for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
+	//	engine.storeAddRankerIndexChans[shard]=make(chan storeRankerIndexReq)
+	//}
 }
 
 // CheckMem check the memory when the memory is larger
@@ -368,10 +368,10 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	// 初始化索引器和排序器
 	for shard := 0; shard < options.NumShards; shard++ {
 		engine.indexers = append(engine.indexers, core.Indexer{})
-		engine.indexers[shard].Init(*options.IndexerOpts)
+		engine.indexers[shard].Init(shard,*options.IndexerOpts)
 
 		engine.rankers = append(engine.rankers, core.Ranker{})
-		engine.rankers[shard].Init(options.IDOnly)
+		engine.rankers[shard].Init(shard,options.IDOnly)
 	}
 
 	// 初始化分词器通道
@@ -453,12 +453,12 @@ func (engine *Engine) Index(docId string, data types.DocData,
 	// data.Tokens
 	engine.internalIndexDoc(docId, data, force)
 
-	hash := murmur.Sum32(docId) % uint32(engine.initOptions.StoreShards)
-
-	if engine.initOptions.UseStore && docId != "0" {
-		engine.storeIndexDocChans[hash] <- storeIndexDocReq{
-			docId: docId, data: data}
-	}
+	//hash := murmur.Sum32(docId) % uint32(engine.initOptions.StoreShards)
+	//
+	//if engine.initOptions.UseStore && docId != "0" {
+	//	engine.storeIndexDocChans[hash] <- storeIndexDocReq{
+	//		docId: docId, data: data}
+	//}
 }
 
 func (engine *Engine) internalIndexDoc(docId string, data types.DocData,
