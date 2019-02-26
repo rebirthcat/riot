@@ -16,6 +16,8 @@
 package core
 
 import (
+	"bytes"
+	"encoding/gob"
 	"log"
 	"riot/store"
 	"sort"
@@ -45,6 +47,13 @@ type Ranker struct {
 	storeAddRankerIndexChan	  chan StoreRankerIndexReq
 }
 
+//静态持久化恢复时读出的结构体类型
+type StoreRankerIndex struct {
+	docExist bool
+	field interface{}
+}
+
+
 //在线持久化请求结构体
 type StoreRankerIndexReq struct {
 	DocID string
@@ -53,17 +62,6 @@ type StoreRankerIndexReq struct {
 }
 
 
-func (ranker *Ranker) SetFields(fields map[string]interface{}) {
-	ranker.lock.Lock()
-	ranker.lock.fields=fields
-	ranker.lock.Unlock()
-}
-
-func (ranker *Ranker)SetDocs(docs map[string]bool)  {
-	ranker.lock.Lock()
-	ranker.lock.docs=docs
-	ranker.lock.Unlock()
-}
 
 // Init init ranker
 func (ranker *Ranker) Init(shard int,onlyID ...bool) {
@@ -85,6 +83,40 @@ func (ranker *Ranker) Init(shard int,onlyID ...bool) {
 	//	ranker.lock.attri = make(map[string]interface{})
 	//}
 }
+
+func (ranker *Ranker)StoreRecoverRanker(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
+	//ranker中的字段
+	fields:=make(map[string]interface{})
+	docsExist:=make(map[string]bool)
+	var erropen error
+	ranker.dbRankerIndex,erropen=store.OpenStore(dbPath,StoreEngine)
+	if ranker.dbRankerIndex==nil||erropen!=nil {
+		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
+	}
+	defer ranker.dbRankerIndex.Close()
+	ranker.dbRankerIndex.ForEach(func(k, v []byte) error {
+		key, value := k, v
+		// 得到docID
+		keystring := string(key)
+		buf := bytes.NewReader(value)
+		dec := gob.NewDecoder(buf)
+		//var data types.DocData
+		var rankeindex StoreRankerIndex
+		err := dec.Decode(&rankeindex)
+		if err == nil {
+			// 添加索引
+			docsExist[keystring]=rankeindex.docExist
+			fields[keystring]=rankeindex.field
+		}
+		return nil
+	})
+	ranker.lock.Lock()
+	ranker.lock.docs=docsExist
+	ranker.lock.fields=fields
+	ranker.lock.Unlock()
+	wg.Done()
+}
+
 
 // AddDoc add doc
 // 给某个文档添加评分字段

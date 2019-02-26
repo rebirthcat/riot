@@ -368,7 +368,14 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	for shard := 0; shard < options.NumShards; shard++ {
 		engine.indexers = append(engine.indexers, core.Indexer{})
 		engine.indexers[shard].Init(shard,*options.IndexerOpts)
-
+		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
+			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
+		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
+			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
+		dbPathRankerIndex := engine.initOptions.StoreFolder + "/" +
+			StoreFilePrefix + ".rankerindex." + strconv.Itoa(shard)
+		go engine.indexers[shard].StoreRecoverForwards(dbPathForwardIndex,engine.initOptions.StoreEngine,&wg)
+		go engine.indexers[shard].StoreRecoverReverse(dbPathReverseIndex,engine.initOptions.StoreEngine,&wg)
 
 		engine.rankers = append(engine.rankers, core.Ranker{})
 		engine.rankers[shard].Init(shard,options.IDOnly)
