@@ -60,7 +60,6 @@ func GetVersion() string {
 	return Version
 }
 
-var engine Engine
 // Engine initialize the engine
 type Engine struct {
 	loc sync.RWMutex

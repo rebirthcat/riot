@@ -63,6 +63,11 @@ type Indexer struct {
 
 	// 每个文档的关键词长度
 	docTokenLens map[string]float32
+
+	shardNumber int
+
+	////当反向索引被更新时接受请求的chan
+	//storeAddRevertIndexChans     []chan types.StoreRevertIndexReq
 }
 
 func (indexer *Indexer) SetNumDocs(numDocs uint64) {

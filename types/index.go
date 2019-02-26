@@ -96,3 +96,17 @@ func (docs DocsId) Swap(i, j int) {
 func (docs DocsId) Less(i, j int) bool {
 	return docs[i] < docs[j]
 }
+
+
+
+type StoreRevertIndexReq struct {
+	token string
+	keywordIndices KeywordIndices
+}
+
+
+type StoreRankerIndexReq struct {
+	docID string
+	docExist bool
+	field interface{}
+}
