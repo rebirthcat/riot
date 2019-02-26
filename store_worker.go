@@ -17,7 +17,8 @@ package riot
 
 import (
 	"bytes"
-	"riot/core"
+
+	"github.com/go-ego/riot/core"
 
 	"encoding/gob"
 )
@@ -25,7 +26,6 @@ import (
 type storeRevertIndexReq struct {
 	token string
 	keywordIndices core.KeywordIndices
-	docTokenLen float32
 }
 
 type storeRankerIndexReq struct {
@@ -44,77 +44,59 @@ type storeRankerIndexReq struct {
 }
 
 type storeForwardIndex struct {
+	docId string
 	//用于恢复docTokenLens map[string]float32
 	tokenLen float32
 	//用于恢复docsState map[string]int
 	field interface{}
 }
 
+//恢复正向索引，所谓正向索引就是值key是docID的map数据，内容包括如下
+//numDocs  		总文档数  	对应于indexer.numDocs字段
+//totalTokenLen 总关键词数（有重复计数）对应于indexer.totalTokenLen字段
+//docsState		每个文档的状态   对应于indexer.tableLock.docsState字段
+//docTokenLens  每个文档的关键词数量 对应于index.docTokenLens
+
+
 func (engine *Engine)storeRecoverForwards(shard int)  {
-
+	//indexer中的字段
 	numDocs:= uint64(0)
-	numDocsBytes,err:=engine.dbForwards[shard].Get([]byte("numDocs"))
-	if err != nil {
-		//log
-		numDocs=0
-	}
-	bufnumDocs := bytes.NewReader(numDocsBytes)
-	dec:=gob.NewDecoder(bufnumDocs)
-	err=dec.Decode(&numDocs)
-	if err!=nil {
-		//log
-	}
 	totalTokenLen:=float32(0)
-	totalTokenLenBytes,err:=engine.dbForwards[shard].Get([]byte("totalTokenLen"))
-	if err != nil {
-		//log
-	}
-	bufTotalTokenLen:=bytes.NewBuffer(totalTokenLenBytes)
-	dec=gob.NewDecoder(bufTotalTokenLen)
-	err=dec.Decode(&totalTokenLen)
-	if err != nil {
-		//log
-	}
 	docsState:=make(map[string]int,numDocs)
-	fields:=make(map[string]interface{},numDocs)
-	docsExist:=make(map[string]bool,numDocs)
 	docTokenLens:=make(map[string]float32,numDocs)
+	//ranker中的字段
+	//fields:=make(map[string]interface{},numDocs)
+	//docsExist:=make(map[string]bool,numDocs)
 
-	engine.dbReverses[shard].ForEach(func(k, v []byte) error {
+	engine.dbForwards[shard].ForEach(func(k, v []byte) error {
 		key, value := k, v
 		// 得到docID
 		keystring := string(key)
-		if keystring!="numDocs"&&keystring!="totalTokenLen"{
-			buf := bytes.NewReader(value)
-			dec := gob.NewDecoder(buf)
-			//var data types.DocData
-			var fowardindex storeForwardIndex
-			err := dec.Decode(&fowardindex)
-			if err == nil {
-				// 添加索引
-				docsState[keystring]=0
-				fields[keystring]=fowardindex.field
-				docsExist[keystring]=true
-				docTokenLens[keystring]=fowardindex.tokenLen
-			}
+		buf := bytes.NewReader(value)
+		dec := gob.NewDecoder(buf)
+		//正向索引结构
+		var fowardindex storeForwardIndex
+		err := dec.Decode(&fowardindex)
+		if err == nil {
+			docsState[keystring] = 0
+			docTokenLens[keystring] = fowardindex.tokenLen
+			numDocs++
+			totalTokenLen += fowardindex.tokenLen
 		}
 		return nil
 	})
 	//恢复indexer
-	engine.indexers[shard].SetdocTokenLens(docTokenLens)
 	engine.indexers[shard].SetTotalTokenLen(totalTokenLen)
 	engine.indexers[shard].SetNumDocs(numDocs)
+	engine.indexers[shard].SetdocTokenLens(docTokenLens)
 	engine.indexers[shard].SetDocsState(docsState)
-	//恢复ranker
-	engine.rankers[shard].SetFields(fields)
-	engine.rankers[shard].SetDocs(docsExist)
-	engine.storeIndexRecoverChan <- true
+	engine.storeRecoverForwardIndexChan <- true
+	////恢复ranker
+	//engine.rankers[shard].SetFields(fields)
+	//engine.rankers[shard].SetDocs(docsExist)
 }
 
-
-
-
-
+//恢复反向索引，即倒排索引，也就是key是关键词，value为id数组的map数据，对应于indexer.TableLock.table字段，是倒排索引最核心的数据
 func (engine *Engine)storeRecoverReverses(shard int)  {
 	table:=make(map[string]*core.KeywordIndices)
 	engine.dbReverses[shard].ForEach(func(k, v []byte) error {
@@ -133,8 +115,19 @@ func (engine *Engine)storeRecoverReverses(shard int)  {
 		return nil
 	})
 	engine.indexers[shard].SetTable(table)
-	engine.storeIndexRecoverChan <- true
+	engine.storeRecoverReverseIndexChan <- true
 }
+
+//恢复ranker数据
+//fields		每个文档的排序字段 对应于ranker.lock.fields字段
+//docsExist     每个文档是正在索引中 对应于ranker.lock.docsExist字段
+
+func (engine *Engine)storeRecoverRankers(shard int)  {
+	//ranker中的字段
+	fields:=make(map[string]interface{})
+	docsExist:=make(map[string]bool)
+}
+
 
 
 //func (engine *Engine)storeRevertIndexAdd(shard int)  {

@@ -277,6 +277,9 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indexer.tableLock.docsState[doc.DocId] = 0
 			indexer.numDocs++
 		}
+
+		//storeReverseIndexReq:=
+
 	}
 }
 

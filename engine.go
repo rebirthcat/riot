@@ -32,10 +32,10 @@ import (
 
 	"sync/atomic"
 
-	"riot/core"
-	"riot/store"
-	"riot/types"
-	"riot/utils"
+	"github.com/go-ego/riot/core"
+	"github.com/go-ego/riot/store"
+	"github.com/go-ego/riot/types"
+	"github.com/go-ego/riot/utils"
 
 	"github.com/go-ego/gse"
 	"github.com/go-ego/murmur"
@@ -85,7 +85,8 @@ type Engine struct {
 	loaded     bool
 	stopTokens StopTokens
 	dbForwards        []store.Store
-	dbReverses         []store.Store
+	dbReverses        []store.Store
+	dbRankers         []store.Store
 
 	// 建立索引器使用的通信通道
 	segmenterChan         chan segmenterReq
@@ -99,14 +100,18 @@ type Engine struct {
 	rankerRemoveDocChans []chan rankerRemoveDocReq
 
 	// 建立持久存储使用的通信通道
-	//storeIndexDocChans []chan storeIndexDocReq
-	//storeInitChan      chan bool
 
-	storeIndexRecoverChan 	chan bool
-	storeRevertIndexChans     []chan storeRevertIndexReq
-//	storeIndexRemoveChans  []chan storeRevertIndexReq
-	storeRankerIndexChans	   []chan storeRankerIndexReq
-//	storeRankerRemoveChan  []chan storeRankerIndexReq
+	//用来恢复indexer中正向索引字段
+	storeRecoverForwardIndexChan 	chan bool
+	//用来恢复indexer中反向索引字段
+	storeRecoverReverseIndexChan 	chan bool
+	//用来恢复ranker中的字段
+	storeRecoverRankerIndexChan 	chan bool
+
+	//当反向索引被更新时接受请求的chan
+	storeAddRevertIndexChans     []chan storeRevertIndexReq
+	//当ranker中的数据被更新是接受的chan
+	storeAddRankerIndexChans	   []chan storeRankerIndexReq
 }
 
 // Indexer initialize the indexer channel
@@ -157,26 +162,16 @@ func (engine *Engine) Ranker(options types.EngineOpts) {
 
 // InitStore initialize the persistent store channel
 func (engine *Engine) InitStore() {
-	//engine.storeIndexDocChans = make(
-	//	[]chan storeIndexDocReq, engine.initOptions.StoreShards)
-	//
-	//for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-	//	engine.storeIndexDocChans[shard] = make(
-	//		chan storeIndexDocReq)
-	//}
-	//engine.storeInitChan = make(
-	//	chan bool, engine.initOptions.StoreShards)
-	engine.storeIndexRecoverChan=make(chan bool,engine.initOptions.StoreShards*2)
+	engine.storeRecoverForwardIndexChan=make(chan bool,engine.initOptions.StoreShards)
+	engine.storeRecoverReverseIndexChan=make(chan bool,engine.initOptions.StoreShards)
+	engine.storeRecoverRankerIndexChan=make(chan bool,engine.initOptions.StoreShards)
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		engine.storeRevertIndexChans[shard]=make(chan storeRevertIndexReq)
+		engine.storeAddRevertIndexChans[shard]=make(chan storeRevertIndexReq)
 	}
 
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		engine.storeRankerIndexChans[shard]=make(chan storeRankerIndexReq)
+		engine.storeAddRankerIndexChans[shard]=make(chan storeRankerIndexReq)
 	}
-
-
-
 }
 
 // CheckMem check the memory when the memory is larger
@@ -220,30 +215,50 @@ func (engine *Engine) Store() {
 			log.Fatal("Unable to open database ", dbPathForwardIndex, ": ", err)
 		}
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
-			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
+			StoreFilePrefix + ".reverseindex." + strconv.Itoa(shard)
 
 		dbreverse, err := store.OpenStore(dbPathReverseIndex, engine.initOptions.StoreEngine)
 		if dbreverse == nil || err != nil {
 			log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", err)
 		}
+		dbPathRankerIndex := engine.initOptions.StoreFolder + "/" +
+			StoreFilePrefix + ".rankerindex." + strconv.Itoa(shard)
+
+		dbranker, err := store.OpenStore(dbPathRankerIndex, engine.initOptions.StoreEngine)
+		if dbranker == nil || err != nil {
+			log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", err)
+		}
 		engine.dbForwards[shard] = dbforward
 		engine.dbReverses[shard] = dbreverse
+		engine.dbRankers[shard]=dbranker
 	}
-	// 从数据库中恢复
+	// 从数据库中恢复正向索引
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
 		go engine.storeRecoverForwards(shard)
 	}
 
-	// 从数据库中恢复
+	// 从数据库中恢复反向索引
+	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
+		go engine.storeRecoverReverses(shard)
+	}
+
+	// 从数据库中恢复ranker
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
 		go engine.storeRecoverReverses(shard)
 	}
 
 	// 等待恢复完成
-	for shard := 0; shard < engine.initOptions.StoreShards*2; shard++ {
-		<-engine.storeIndexRecoverChan
+	for shard := 0; shard < engine.initOptions.StoreShards*3; shard++ {
+		<-engine.storeRecoverForwardIndexChan
 	}
 
+	for shard := 0; shard < engine.initOptions.StoreShards*3; shard++ {
+		<-engine.storeRecoverReverseIndexChan
+	}
+
+	for shard := 0; shard < engine.initOptions.StoreShards*3; shard++ {
+		<-engine.storeRecoverRankerIndexChan
+	}
 	for {
 		runtime.Gosched()
 
@@ -276,12 +291,20 @@ func (engine *Engine) Store() {
 		if dbreverse == nil || err != nil {
 			log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", err)
 		}
+		dbPathRankerIndex := engine.initOptions.StoreFolder + "/" +
+			StoreFilePrefix + ".rankerindex." + strconv.Itoa(shard)
+
+		dbranker, err := store.OpenStore(dbPathRankerIndex, engine.initOptions.StoreEngine)
+		if dbranker == nil || err != nil {
+			log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", err)
+		}
 		engine.dbForwards[shard] = dbforward
 		engine.dbReverses[shard] = dbreverse
+		engine.dbRankers[shard]=dbranker
 	}
 
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		go engine.storeIndexDoc(shard)
+		//go engine.storeIndexDoc(shard)
 	}
 	// }
 }
