@@ -23,33 +23,34 @@ import (
 	"encoding/gob"
 )
 
+
+//静态恢复
+type storeForwardIndex struct {
+	//用于恢复docTokenLens map[string]float32
+	tokenLen float32
+}
+
+type storeRankerIndex struct {
+	docExist bool
+	field interface{}
+}
+
+//动态请求
+type storeForwardIndexReq struct {
+
+}
+
 type storeRevertIndexReq struct {
 	token string
 	keywordIndices core.KeywordIndices
 }
 
 type storeRankerIndexReq struct {
-
-	fieldKey string
-	fieldValue interface{}
-
-	docKey string
-	docValue bool
-
-	contentKey string
-	contentValue string
-
-	attriKey string
-	attriValue interface{}
-}
-
-type storeForwardIndex struct {
-	docId string
-	//用于恢复docTokenLens map[string]float32
-	tokenLen float32
-	//用于恢复docsState map[string]int
+	docID string
+	docExist bool
 	field interface{}
 }
+
 
 //恢复正向索引，所谓正向索引就是值key是docID的map数据，内容包括如下
 //numDocs  		总文档数  	对应于indexer.numDocs字段
@@ -91,9 +92,6 @@ func (engine *Engine)storeRecoverForwards(shard int)  {
 	engine.indexers[shard].SetdocTokenLens(docTokenLens)
 	engine.indexers[shard].SetDocsState(docsState)
 	engine.storeRecoverForwardIndexChan <- true
-	////恢复ranker
-	//engine.rankers[shard].SetFields(fields)
-	//engine.rankers[shard].SetDocs(docsExist)
 }
 
 //恢复反向索引，即倒排索引，也就是key是关键词，value为id数组的map数据，对应于indexer.TableLock.table字段，是倒排索引最核心的数据
@@ -124,8 +122,27 @@ func (engine *Engine)storeRecoverReverses(shard int)  {
 
 func (engine *Engine)storeRecoverRankers(shard int)  {
 	//ranker中的字段
-	//fields:=make(map[string]interface{})
-	//docsExist:=make(map[string]bool)
+	fields:=make(map[string]interface{})
+	docsExist:=make(map[string]bool)
+	engine.dbReverses[shard].ForEach(func(k, v []byte) error {
+		key, value := k, v
+		// 得到docID
+		keystring := string(key)
+		buf := bytes.NewReader(value)
+		dec := gob.NewDecoder(buf)
+		//var data types.DocData
+		var rankeindex storeRankerIndex
+		err := dec.Decode(&rankeindex)
+		if err == nil {
+			// 添加索引
+			docsExist[keystring]=rankeindex.docExist
+			fields[keystring]=rankeindex.field
+		}
+		return nil
+	})
+	engine.rankers[shard].SetDocs(docsExist)
+	engine.rankers[shard].SetFields(fields)
+	engine.storeRecoverRankerIndexChan <- true
 }
 
 
