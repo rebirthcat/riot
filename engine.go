@@ -22,7 +22,6 @@ package riot
 import (
 	"fmt"
 	"log"
-	"os"
 	"runtime"
 	"sort"
 	"strconv"
@@ -99,19 +98,14 @@ type Engine struct {
 	rankerRankChans      []chan rankerRankReq
 	rankerRemoveDocChans []chan rankerRemoveDocReq
 
-	// 建立持久存储使用的通信通道
-
-	//用来恢复indexer中正向索引字段
-	storeRecoverForwardIndexChan 	chan bool
-	//用来恢复indexer中反向索引字段
-	storeRecoverReverseIndexChan 	chan bool
-	//用来恢复ranker中的字段
-	storeRecoverRankerIndexChan 	chan bool
-
-	////当反向索引被更新时接受请求的chan
-	//storeAddRevertIndexChans     []chan storeRevertIndexReq
-	////当ranker中的数据被更新是接受的chan
-	//storeAddRankerIndexChans	   []chan storeRankerIndexReq
+	//// 建立持久存储使用的通信通道
+	//
+	////用来恢复indexer中正向索引字段
+	//storeRecoverForwardIndexChan 	chan bool
+	////用来恢复indexer中反向索引字段
+	//storeRecoverReverseIndexChan 	chan bool
+	////用来恢复ranker中的字段
+	//storeRecoverRankerIndexChan 	chan bool
 }
 
 // Indexer initialize the indexer channel
@@ -161,18 +155,8 @@ func (engine *Engine) Ranker(options types.EngineOpts) {
 }
 
 // InitStore initialize the persistent store channel
-func (engine *Engine) InitStore() {
-	engine.storeRecoverForwardIndexChan=make(chan bool,engine.initOptions.StoreShards)
-	engine.storeRecoverReverseIndexChan=make(chan bool,engine.initOptions.StoreShards)
-	engine.storeRecoverRankerIndexChan=make(chan bool,engine.initOptions.StoreShards)
-	//for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-	//	engine.storeAddRevertIndexChans[shard]=make(chan storeRevertIndexReq)
-	//}
-
-	//for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-	//	engine.storeAddRankerIndexChans[shard]=make(chan storeRankerIndexReq)
-	//}
-}
+//func (engine *Engine) InitStore() {
+//}
 
 // CheckMem check the memory when the memory is larger
 // than 99.99% using the store
@@ -194,117 +178,7 @@ func (engine *Engine) CheckMem() {
 	}
 }
 
-// Store start the persistent store work connection
-func (engine *Engine) Store() {
-	// if engine.initOptions.UseStore {
-	err := os.MkdirAll(engine.initOptions.StoreFolder, 0700)
-	if err != nil {
-		log.Fatalf("Can not create directory: %s ; %v",
-			engine.initOptions.StoreFolder, err)
-	}
 
-	// 打开或者创建数据库
-	engine.dbForwards = make([]store.Store, engine.initOptions.StoreShards)
-	engine.dbReverses = make([]store.Store, engine.initOptions.StoreShards)
-	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
-			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
-
-		dbforward, err := store.OpenStore(dbPathForwardIndex, engine.initOptions.StoreEngine)
-		if dbforward == nil || err != nil {
-			log.Fatal("Unable to open database ", dbPathForwardIndex, ": ", err)
-		}
-		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
-			StoreFilePrefix + ".reverseindex." + strconv.Itoa(shard)
-
-		dbreverse, err := store.OpenStore(dbPathReverseIndex, engine.initOptions.StoreEngine)
-		if dbreverse == nil || err != nil {
-			log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", err)
-		}
-		dbPathRankerIndex := engine.initOptions.StoreFolder + "/" +
-			StoreFilePrefix + ".rankerindex." + strconv.Itoa(shard)
-
-		dbranker, err := store.OpenStore(dbPathRankerIndex, engine.initOptions.StoreEngine)
-		if dbranker == nil || err != nil {
-			log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", err)
-		}
-		engine.dbForwards[shard] = dbforward
-		engine.dbReverses[shard] = dbreverse
-		engine.dbRankers[shard]=dbranker
-	}
-	// 从数据库中恢复正向索引
-	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		go engine.storeRecoverForwards(shard)
-	}
-	for shard := 0; shard < engine.initOptions.StoreShards*3; shard++ {
-		<-engine.storeRecoverForwardIndexChan
-	}
-
-	// 从数据库中恢复反向索引
-	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		go engine.storeRecoverReverses(shard)
-	}
-	for shard := 0; shard < engine.initOptions.StoreShards*3; shard++ {
-		<-engine.storeRecoverReverseIndexChan
-	}
-
-	// 从数据库中恢复ranker
-	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		go engine.storeRecoverReverses(shard)
-	}
-	for shard := 0; shard < engine.initOptions.StoreShards*3; shard++ {
-		<-engine.storeRecoverRankerIndexChan
-	}
-
-	for {
-		runtime.Gosched()
-
-		inx := atomic.LoadUint64(&engine.numDocsIndexed)
-		numDoced := engine.numIndexingReqs == inx
-
-		if numDoced {
-			break
-		}
-
-	}
-
-	// 关闭并重新打开数据库
-	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		//engine.dbs[shard].Close()
-		engine.dbForwards[shard].Close()
-		engine.dbReverses[shard].Close()
-
-		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
-			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
-
-		dbforward, err := store.OpenStore(dbPathForwardIndex, engine.initOptions.StoreEngine)
-		if dbforward == nil || err != nil {
-			log.Fatal("Unable to open database ", dbPathForwardIndex, ": ", err)
-		}
-		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
-			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
-
-		dbreverse, err := store.OpenStore(dbPathReverseIndex, engine.initOptions.StoreEngine)
-		if dbreverse == nil || err != nil {
-			log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", err)
-		}
-		dbPathRankerIndex := engine.initOptions.StoreFolder + "/" +
-			StoreFilePrefix + ".rankerindex." + strconv.Itoa(shard)
-
-		dbranker, err := store.OpenStore(dbPathRankerIndex, engine.initOptions.StoreEngine)
-		if dbranker == nil || err != nil {
-			log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", err)
-		}
-		engine.dbForwards[shard] = dbforward
-		engine.dbReverses[shard] = dbreverse
-		engine.dbRankers[shard]=dbranker
-	}
-
-	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
-		//go engine.storeIndexDoc(shard)
-	}
-	// }
-}
 
 // WithGse Using user defined segmenter
 // If using a not nil segmenter and the dictionary is loaded,
@@ -363,6 +237,7 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	}
 
 	// 初始化索引器和排序器
+	// 启动每个索引器内部的正向索引恢复协程和反向索引恢复协程，启动每个排序器内部索引恢复协程，并阻塞等待所有协助全部执行完毕
 	wg:=sync.WaitGroup{}
 	wg.Add(options.NumShards*3)
 	for shard := 0; shard < options.NumShards; shard++ {
@@ -378,9 +253,9 @@ func (engine *Engine) Init(options types.EngineOpts) {
 			StoreFilePrefix + ".rankerindex." + strconv.Itoa(shard)
 		go engine.indexers[shard].StoreRecoverForwards(dbPathForwardIndex,engine.initOptions.StoreEngine,&wg)
 		go engine.indexers[shard].StoreRecoverReverse(dbPathReverseIndex,engine.initOptions.StoreEngine,&wg)
-		go engine.rankers[shard].S
-
+		go engine.rankers[shard].StoreRecoverRanker(dbPathRankerIndex,engine.initOptions.StoreEngine,&wg)
 	}
+	wg.Wait()
 
 	// 初始化分词器通道
 	engine.segmenterChan = make(
@@ -396,14 +271,9 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	engine.CheckMem()
 
 	// 初始化持久化存储通道
-	if engine.initOptions.UseStore {
-		engine.InitStore()
-	}
-
-	// 启动持久化恢复工作
-	if engine.initOptions.UseStore {
-		engine.Store()
-	}
+	//if engine.initOptions.UseStore {
+	//	engine.InitStore()
+	//}
 
 	// 启动分词器
 	for iThread := 0; iThread < options.NumGseThreads; iThread++ {
@@ -530,12 +400,12 @@ func (engine *Engine) RemoveDoc(docId string, forceUpdate ...bool) {
 		engine.rankerRemoveDocChans[shard] <- rankerRemoveDocReq{docId: docId}
 	}
 
-	if engine.initOptions.UseStore && docId != "0" {
-		// 从数据库中删除
-		hash := murmur.Sum32(docId) % uint32(engine.initOptions.StoreShards)
-
-		go engine.storeRemoveDoc(docId, hash)
-	}
+	//if engine.initOptions.UseStore && docId != "0" {
+	//	// 从数据库中删除
+	//	hash := murmur.Sum32(docId) % uint32(engine.initOptions.StoreShards)
+	//
+	//	go engine.storeRemoveDoc(docId, hash)
+	//}
 }
 
 // // 获取文本的分词结果
