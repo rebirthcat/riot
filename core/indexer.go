@@ -127,7 +127,7 @@ func (indexer *Indexer) Init(shard int,options types.IndexerOpts) {
 }
 
 
-func (indexer *Indexer)storeRecoverForwards(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
+func (indexer *Indexer)StoreRecoverForwards(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
 	//indexer中的字段
 	numDocs:= uint64(0)
 	totalTokenLen:=float32(0)
@@ -166,7 +166,7 @@ func (indexer *Indexer)storeRecoverForwards(dbPath string,StoreEngine string, wg
 	wg.Done()
 }
 
-func (indexer *Indexer)storeRecoverReverse(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
+func (indexer *Indexer)StoreRecoverReverse(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
 	table:=make(map[string]*KeywordIndices)
 	var erropen error
 	indexer.dbRevertIndex,erropen=store.OpenStore(dbPath,StoreEngine)

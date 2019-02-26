@@ -369,6 +369,7 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		engine.indexers = append(engine.indexers, core.Indexer{})
 		engine.indexers[shard].Init(shard,*options.IndexerOpts)
 
+
 		engine.rankers = append(engine.rankers, core.Ranker{})
 		engine.rankers[shard].Init(shard,options.IDOnly)
 	}
