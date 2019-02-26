@@ -17,6 +17,7 @@ package core
 
 import (
 	"log"
+	"riot/store"
 	"sort"
 	"sync"
 
@@ -39,6 +40,8 @@ type Ranker struct {
 	idOnly      bool
 	initialized bool
 	shardNumber int
+
+	dbRankerIndex store.Store
 	storeAddRankerIndexChan	  chan StoreRankerIndexReq
 }
 

@@ -236,29 +236,26 @@ func (engine *Engine) Store() {
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
 		go engine.storeRecoverForwards(shard)
 	}
+	for shard := 0; shard < engine.initOptions.StoreShards*3; shard++ {
+		<-engine.storeRecoverForwardIndexChan
+	}
 
 	// 从数据库中恢复反向索引
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
 		go engine.storeRecoverReverses(shard)
+	}
+	for shard := 0; shard < engine.initOptions.StoreShards*3; shard++ {
+		<-engine.storeRecoverReverseIndexChan
 	}
 
 	// 从数据库中恢复ranker
 	for shard := 0; shard < engine.initOptions.StoreShards; shard++ {
 		go engine.storeRecoverReverses(shard)
 	}
-
-	// 等待恢复完成
-	for shard := 0; shard < engine.initOptions.StoreShards*3; shard++ {
-		<-engine.storeRecoverForwardIndexChan
-	}
-
-	for shard := 0; shard < engine.initOptions.StoreShards*3; shard++ {
-		<-engine.storeRecoverReverseIndexChan
-	}
-
 	for shard := 0; shard < engine.initOptions.StoreShards*3; shard++ {
 		<-engine.storeRecoverRankerIndexChan
 	}
+
 	for {
 		runtime.Gosched()
 
@@ -366,6 +363,8 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	}
 
 	// 初始化索引器和排序器
+	wg:=sync.WaitGroup{}
+	wg.Add(options.NumShards*3)
 	for shard := 0; shard < options.NumShards; shard++ {
 		engine.indexers = append(engine.indexers, core.Indexer{})
 		engine.indexers[shard].Init(shard,*options.IndexerOpts)
@@ -392,17 +391,23 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		engine.InitStore()
 	}
 
+	// 启动持久化恢复工作
+	if engine.initOptions.UseStore {
+		engine.Store()
+	}
+
 	// 启动分词器
 	for iThread := 0; iThread < options.NumGseThreads; iThread++ {
 		go engine.segmenterWorker()
 	}
 
-	// 启动索引器和排序器
+	// 启动索引器和排序器以及各自对应的持久化工作协程
 	for shard := 0; shard < options.NumShards; shard++ {
 		go engine.indexerAddDoc(shard)
 		go engine.indexerRemoveDoc(shard)
 		go engine.rankerAddDoc(shard)
 		go engine.rankerRemoveDoc(shard)
+		//go engine.indexers[shard].
 
 		for i := 0; i < options.NumIndexerThreads; i++ {
 			go engine.indexerLookup(shard)
@@ -412,10 +417,7 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		}
 	}
 
-	// 启动持久化存储工作协程
-	if engine.initOptions.UseStore {
-		engine.Store()
-	}
+
 
 	atomic.AddUint64(&engine.numDocsStored, engine.numIndexingReqs)
 }

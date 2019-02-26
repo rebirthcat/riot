@@ -20,14 +20,18 @@ Package core is riot core
 package core
 
 import (
+	"bytes"
+	"encoding/gob"
 	"log"
 	"math"
+	"riot/store"
 	"sort"
 	"sync"
 
 	"github.com/rebirthcat/riot/types"
 	"github.com/rebirthcat/riot/utils"
 )
+
 
 // Indexer 索引器
 type Indexer struct {
@@ -65,11 +69,19 @@ type Indexer struct {
 	docTokenLens map[string]float32
 
 	shardNumber int
-
-	////当反向索引被更新时接受请求的chan
-	storeAddRevertIndexChan     chan StoreRevertIndexReq
-
+	//正向索引持久化静态恢复接口
+	dbforwardIndex  store.Store
+	//正向索引持久化动态更新管道
 	storeAddForwardIndexChan    chan StoreForwardIndexReq
+	//反向索引持久化静态恢复接口
+	dbRevertIndex   store.Store
+	//反向索引持久化动态更新管道
+	storeAddRevertIndexChan    chan StoreRevertIndexReq
+}
+//系统重启时从持久化文件中读出来的一行数据所反序列化得到的类型
+type storeForwardIndex struct {
+	//用于恢复docTokenLens map[string]float32
+	tokenLen float32
 }
 
 // KeywordIndices 反向索引表的一行，收集了一个搜索键出现的所有文档，按照DocId从小到大排序。
@@ -91,31 +103,6 @@ type StoreForwardIndexReq struct {
 	DocTokenLen float32
 }
 
-func (indexer *Indexer) SetNumDocs(numDocs uint64) {
-	indexer.numDocs=numDocs
-}
-func (indexer *Indexer) SetTotalTokenLen(totalTokenLen float32) {
-	indexer.totalTokenLen=totalTokenLen
-}
-
-func (indexer *Indexer) SetdocTokenLens(docTokenLens  map[string]float32) {
-	indexer.docTokenLens=docTokenLens
-}
-
-
-func (indexer *Indexer) SetTable(table map[string]*KeywordIndices)  {
-	indexer.tableLock.Lock()
-	indexer.tableLock.table=table
-	indexer.tableLock.Unlock()
-}
-
-func (indexer *Indexer)SetDocsState(docsState map[string]int)  {
-	indexer.tableLock.Lock()
-	indexer.tableLock.docsState=docsState
-	indexer.tableLock.Unlock()
-}
-
-
 // Init 初始化索引器
 func (indexer *Indexer) Init(shard int,options types.IndexerOpts) {
 	if indexer.initialized == true {
@@ -133,10 +120,81 @@ func (indexer *Indexer) Init(shard int,options types.IndexerOpts) {
 	indexer.removeCacheLock.removeCache = make(
 		[]string, indexer.initOptions.DocCacheSize*2)
 	indexer.docTokenLens = make(map[string]float32)
-	indexer.shardNumber=shard
+
 	indexer.storeAddForwardIndexChan=make(chan StoreForwardIndexReq)
 	indexer.storeAddRevertIndexChan=make(chan StoreRevertIndexReq)
+	indexer.shardNumber=shard
 }
+
+
+func (indexer *Indexer)storeRecoverForwards(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
+	//indexer中的字段
+	numDocs:= uint64(0)
+	totalTokenLen:=float32(0)
+	docsState:=make(map[string]int,numDocs)
+	docTokenLens:=make(map[string]float32,numDocs)
+	var erropen error
+	indexer.dbforwardIndex, erropen= store.OpenStore(dbPath, StoreEngine)
+	if indexer.dbforwardIndex == nil || erropen != nil {
+		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
+	}
+	defer indexer.dbforwardIndex.Close()
+	indexer.dbforwardIndex.ForEach(func(k, v []byte) error {
+		key, value := k, v
+		// 得到docID
+		keystring := string(key)
+		buf := bytes.NewReader(value)
+		dec := gob.NewDecoder(buf)
+		//正向索引结构
+		var fowardindex storeForwardIndex
+		err := dec.Decode(&fowardindex)
+		if err == nil {
+			docsState[keystring] = 0
+			docTokenLens[keystring] = fowardindex.tokenLen
+			numDocs++
+			totalTokenLen += fowardindex.tokenLen
+		}
+		return nil
+	})
+	//恢复indexer
+	indexer.totalTokenLen=totalTokenLen
+	indexer.numDocs=numDocs
+	indexer.docTokenLens=docTokenLens
+	indexer.tableLock.Lock()
+	indexer.tableLock.docsState=docsState
+	indexer.tableLock.Unlock()
+	wg.Done()
+}
+
+func (indexer *Indexer)storeRecoverReverse(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
+	table:=make(map[string]*KeywordIndices)
+	var erropen error
+	indexer.dbRevertIndex,erropen=store.OpenStore(dbPath,StoreEngine)
+	if indexer.dbRevertIndex==nil||erropen!=nil {
+		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
+	}
+	defer indexer.dbRevertIndex.Close()
+	indexer.dbRevertIndex.ForEach(func(k, v []byte) error {
+		key, value := k, v
+		// 得到docID
+		keystring := string(key)
+		buf := bytes.NewReader(value)
+		dec := gob.NewDecoder(buf)
+		//var data types.DocData
+		var keywordIndices KeywordIndices
+		err := dec.Decode(&keywordIndices)
+		if err == nil {
+			// 添加索引
+			table[keystring]=&keywordIndices
+		}
+		return nil
+	})
+	indexer.tableLock.Lock()
+	indexer.tableLock.table=table
+	indexer.tableLock.Unlock()
+	wg.Done()
+}
+
 
 // getDocId 从 KeywordIndices 中得到第i个文档的 DocId
 func (indexer *Indexer) getDocId(ti *KeywordIndices, i int) string {
@@ -365,6 +423,11 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 		indexer.totalTokenLen -= indexer.docTokenLens[docId]
 		delete(indexer.docTokenLens, docId)
 		delete(indexer.tableLock.docsState, docId)
+		//持久化
+		indexer.storeAddForwardIndexChan<-StoreForwardIndexReq{
+			DocID:docId,
+			DocTokenLen:-1,
+		}
 	}
 
 	for keyword, indices := range indexer.tableLock.table {
@@ -417,9 +480,21 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 
 		if len(indices.docIds) == 0 {
 			delete(indexer.tableLock.table, keyword)
+
+		}
+		//持久化
+		indexer.storeAddRevertIndexChan<-StoreRevertIndexReq{
+			Token:keyword,
+			KeywordIndices:indices,
 		}
 	}
 }
+
+//func (indexer *Indexer) StoreForwardIndexWorker() {
+//	requeset:<-indexer.storeAddForwardIndexChan
+//
+//}
+
 
 // Lookup lookup docs
 // 查找包含全部搜索键(AND操作)的文档
