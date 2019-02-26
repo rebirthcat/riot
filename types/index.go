@@ -100,13 +100,17 @@ func (docs DocsId) Less(i, j int) bool {
 
 
 type StoreRevertIndexReq struct {
-	token string
-	keywordIndices KeywordIndices
+	Token string
+	KeywordIndices *KeywordIndices
 }
 
+type StoreForwardIndexReq struct {
+	DocID string
+	DocTokenLen float32
+}
 
 type StoreRankerIndexReq struct {
-	docID string
-	docExist bool
-	field interface{}
+	DocID string
+	DocExist bool
+	Field interface{}
 }

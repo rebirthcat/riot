@@ -67,7 +67,7 @@ type Indexer struct {
 	shardNumber int
 
 	////当反向索引被更新时接受请求的chan
-	//storeAddRevertIndexChans     []chan types.StoreRevertIndexReq
+	storeAddRevertIndexChan     chan types.StoreRevertIndexReq
 }
 
 func (indexer *Indexer) SetNumDocs(numDocs uint64) {
@@ -283,8 +283,9 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indexer.numDocs++
 		}
 
-		//storeReverseIndexReq:=
+		indexer.storeAddRevertIndexChan<-types.StoreRevertIndexReq{
 
+		}
 	}
 }
 
