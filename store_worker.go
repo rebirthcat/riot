@@ -18,7 +18,7 @@ package riot
 import (
 	"bytes"
 
-	"github.com/go-ego/riot/core"
+	"github.com/rebirthcat/riot/core"
 
 	"encoding/gob"
 )
@@ -124,8 +124,8 @@ func (engine *Engine)storeRecoverReverses(shard int)  {
 
 func (engine *Engine)storeRecoverRankers(shard int)  {
 	//ranker中的字段
-	fields:=make(map[string]interface{})
-	docsExist:=make(map[string]bool)
+	//fields:=make(map[string]interface{})
+	//docsExist:=make(map[string]bool)
 }
 
 

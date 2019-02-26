@@ -25,8 +25,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/go-ego/riot/types"
-	"github.com/go-ego/riot/utils"
+	"github.com/rebirthcat/riot/types"
+	"github.com/rebirthcat/riot/utils"
 )
 
 // Indexer 索引器
