@@ -64,15 +64,16 @@ type StoreRankerIndexReq struct {
 
 
 // Init init ranker
-func (ranker *Ranker) Init(shard int,onlyID ...bool) {
+func (ranker *Ranker) Init(shard int,onlyID bool) {
 	if ranker.initialized == true {
 		log.Fatal("The Ranker can not be initialized twice.")
 	}
 	ranker.initialized = true
 
-	if len(onlyID) > 0 {
-		ranker.idOnly = onlyID[0]
-	}
+	//if len(onlyID) > 0 {
+	//	ranker.idOnly = onlyID[0]
+	//}
+	ranker.idOnly=onlyID
 
 	ranker.lock.fields = make(map[string]interface{})
 	ranker.lock.docs = make(map[string]bool)

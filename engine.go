@@ -368,6 +368,8 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	for shard := 0; shard < options.NumShards; shard++ {
 		engine.indexers = append(engine.indexers, core.Indexer{})
 		engine.indexers[shard].Init(shard,*options.IndexerOpts)
+		engine.rankers = append(engine.rankers, core.Ranker{})
+		engine.rankers[shard].Init(shard,options.IDOnly)
 		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
@@ -376,9 +378,8 @@ func (engine *Engine) Init(options types.EngineOpts) {
 			StoreFilePrefix + ".rankerindex." + strconv.Itoa(shard)
 		go engine.indexers[shard].StoreRecoverForwards(dbPathForwardIndex,engine.initOptions.StoreEngine,&wg)
 		go engine.indexers[shard].StoreRecoverReverse(dbPathReverseIndex,engine.initOptions.StoreEngine,&wg)
+		go engine.rankers[shard].S
 
-		engine.rankers = append(engine.rankers, core.Ranker{})
-		engine.rankers[shard].Init(shard,options.IDOnly)
 	}
 
 	// 初始化分词器通道
