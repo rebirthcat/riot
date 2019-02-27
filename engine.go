@@ -243,9 +243,9 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	wg.Add(options.NumShards*3)
 	for shard := 0; shard < options.NumShards; shard++ {
 		engine.indexers = append(engine.indexers, core.Indexer{})
-		engine.indexers[shard].Init(shard,engine.initOptions.NumShards,*options.IndexerOpts)
+		engine.indexers[shard].Init(shard,*options.IndexerOpts)
 		engine.rankers = append(engine.rankers, core.Ranker{})
-		engine.rankers[shard].Init(shard,engine.initOptions.NumShards,options.IDOnly)
+		engine.rankers[shard].Init(shard,options.IDOnly)
 		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
