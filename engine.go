@@ -78,8 +78,8 @@ type Engine struct {
 	initOptions types.EngineOpts
 	initialized bool
 
-	indexers   []core.Indexer
-	rankers    []core.Ranker
+	indexers   []*core.Indexer
+	rankers    []*core.Ranker
 	segmenter  gse.Segmenter
 	loaded     bool
 	stopTokens StopTokens
@@ -107,6 +107,7 @@ type Engine struct {
 	////用来恢复ranker中的字段
 	//storeRecoverRankerIndexChan 	chan bool
 }
+
 
 // Indexer initialize the indexer channel
 func (engine *Engine) Indexer(options types.EngineOpts) {
@@ -242,9 +243,9 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	wg.Add(options.NumShards*3)
 	for shard := 0; shard < options.NumShards; shard++ {
 		engine.indexers = append(engine.indexers, core.Indexer{})
-		engine.indexers[shard].Init(shard,*options.IndexerOpts)
+		engine.indexers[shard].Init(shard,engine.initOptions.NumShards,*options.IndexerOpts)
 		engine.rankers = append(engine.rankers, core.Ranker{})
-		engine.rankers[shard].Init(shard,options.IDOnly)
+		engine.rankers[shard].Init(shard,engine.initOptions.NumShards,options.IDOnly)
 		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +

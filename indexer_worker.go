@@ -43,6 +43,12 @@ type indexerRemoveDocReq struct {
 	forceUpdate bool
 }
 
+//func (engin *Engine) indexerAddDocToStore(shard int) {
+//	for {
+//		request:=<-engin.indexers[shard].
+//	}
+//}
+
 func (engine *Engine) indexerAddDoc(shard int) {
 	for {
 		request := <-engine.indexerAddDocChans[shard]

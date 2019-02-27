@@ -64,7 +64,7 @@ type StoreRankerIndexReq struct {
 
 
 // Init init ranker
-func (ranker *Ranker) Init(shard int,onlyID bool) {
+func (ranker *Ranker) Init(shard int,NumShard int,onlyID bool) {
 	if ranker.initialized == true {
 		log.Fatal("The Ranker can not be initialized twice.")
 	}

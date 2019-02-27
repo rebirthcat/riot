@@ -25,6 +25,7 @@ import (
 	"log"
 	"math"
 	"riot/store"
+	"runtime"
 	"sort"
 	"sync"
 
@@ -104,7 +105,7 @@ type StoreForwardIndexReq struct {
 }
 
 // Init 初始化索引器
-func (indexer *Indexer) Init(shard int,options types.IndexerOpts) {
+func (indexer *Indexer) Init(shard int,NumShard int,options types.IndexerOpts) {
 	if indexer.initialized == true {
 		log.Fatal("The Indexer can not be initialized twice.")
 	}
@@ -121,8 +122,8 @@ func (indexer *Indexer) Init(shard int,options types.IndexerOpts) {
 		[]string, indexer.initOptions.DocCacheSize*2)
 	indexer.docTokenLens = make(map[string]float32)
 
-	indexer.storeAddForwardIndexChan=make(chan StoreForwardIndexReq)
-	indexer.storeAddRevertIndexChan=make(chan StoreRevertIndexReq)
+	indexer.storeAddForwardIndexChan=make(chan StoreForwardIndexReq,runtime.NumCPU())
+	indexer.storeAddRevertIndexChan=make(chan StoreRevertIndexReq,runtime.NumCPU())
 	indexer.shardNumber=shard
 }
 
