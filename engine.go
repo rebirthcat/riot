@@ -32,7 +32,6 @@ import (
 	"sync/atomic"
 
 	"riot/core"
-	"riot/store"
 	"riot/types"
 	"riot/utils"
 
@@ -78,15 +77,11 @@ type Engine struct {
 	initOptions types.EngineOpts
 	initialized bool
 
-	indexers   []core.Indexer
-	rankers    []core.Ranker
+	indexers   []*core.Indexer
+	rankers    []*core.Ranker
 	segmenter  gse.Segmenter
 	loaded     bool
 	stopTokens StopTokens
-	dbForwards        []store.Store
-	dbReverses        []store.Store
-	dbRankers         []store.Store
-
 	// 建立索引器使用的通信通道
 	segmenterChan         chan segmenterReq
 	indexerAddDocChans    []chan indexerAddDocReq
@@ -97,15 +92,6 @@ type Engine struct {
 	indexerLookupChans   []chan indexerLookupReq
 	rankerRankChans      []chan rankerRankReq
 	rankerRemoveDocChans []chan rankerRemoveDocReq
-
-	//// 建立持久存储使用的通信通道
-	//
-	////用来恢复indexer中正向索引字段
-	//storeRecoverForwardIndexChan 	chan bool
-	////用来恢复indexer中反向索引字段
-	//storeRecoverReverseIndexChan 	chan bool
-	////用来恢复ranker中的字段
-	//storeRecoverRankerIndexChan 	chan bool
 }
 
 
@@ -242,22 +228,21 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	wg:=sync.WaitGroup{}
 	wg.Add(options.NumShards*3)
 	for shard := 0; shard < options.NumShards; shard++ {
-		engine.indexers = append(engine.indexers, core.Indexer{})
-		engine.indexers[shard].Init(shard,*options.IndexerOpts)
-		engine.rankers = append(engine.rankers, core.Ranker{})
-		engine.rankers[shard].Init(shard,options.IDOnly)
+		engine.indexers = append(engine.indexers, &core.Indexer{})
+		engine.indexers[shard].Init(shard,options.StoreIndexBufLen, *options.IndexerOpts)
+		engine.rankers = append(engine.rankers, &core.Ranker{})
+		engine.rankers[shard].Init(shard,options.StoreRankerBufLen,options.IDOnly)
 		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
 		dbPathRankerIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".rankerindex." + strconv.Itoa(shard)
-		go engine.indexers[shard].StoreRecoverForwards(dbPathForwardIndex,engine.initOptions.StoreEngine,&wg)
-		go engine.indexers[shard].StoreRecoverReverse(dbPathReverseIndex,engine.initOptions.StoreEngine,&wg)
+		go engine.indexers[shard].StoreRecoverForwardIndex(dbPathForwardIndex,engine.initOptions.StoreEngine,&wg)
+		go engine.indexers[shard].StoreRecoverReverseIndex(dbPathReverseIndex,engine.initOptions.StoreEngine,&wg)
 		go engine.rankers[shard].StoreRecoverRanker(dbPathRankerIndex,engine.initOptions.StoreEngine,&wg)
 	}
 	wg.Wait()
-
 	// 初始化分词器通道
 	engine.segmenterChan = make(
 		chan segmenterReq, options.NumGseThreads)
@@ -285,9 +270,11 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	for shard := 0; shard < options.NumShards; shard++ {
 		go engine.indexerAddDoc(shard)
 		go engine.indexerRemoveDoc(shard)
+		go engine.indexers[shard].StoreUpdateForWardIndexWorker()
+		go engine.indexers[shard].StoreUpdateReverseIndexWorker()
 		go engine.rankerAddDoc(shard)
 		go engine.rankerRemoveDoc(shard)
-		//go engine.indexers[shard].
+
 
 		for i := 0; i < options.NumIndexerThreads; i++ {
 			go engine.indexerLookup(shard)
@@ -799,8 +786,21 @@ func (engine *Engine) FlushIndex() {
 func (engine *Engine) Close() {
 	engine.Flush()
 	if engine.initOptions.UseStore {
-		for _, db := range engine.dbs {
-			db.Close()
+		for _, indexer := range engine.indexers {
+			dbf:=indexer.GetForwardIndexDB()
+			if dbf!=nil {
+				dbf.Close()
+			}
+			dbr:=indexer.GetReverseIndexDB()
+			if dbr!=nil {
+				dbr.Close()
+			}
+		}
+		for _, ranker := range engine.rankers {
+			dbr:=ranker.GetRankerIndexDB()
+			if dbr != nil {
+				dbr.Close()
+			}
 		}
 	}
 }

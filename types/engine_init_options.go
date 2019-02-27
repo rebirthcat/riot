@@ -41,6 +41,7 @@ var (
 		B:  0.75,
 	}
 	defaultStoreShards = 8
+	defaultStoreChanBufLen=16
 )
 
 // EngineOpts init engine options
@@ -79,11 +80,16 @@ type EngineOpts struct {
 	// 索引器的信道缓冲长度
 	IndexerBufLen int
 
+	//索引器将索引增加请求传递到持久化信道的缓冲长度
+	StoreIndexBufLen int
+
 	// 索引器每个shard分配的线程数
 	NumIndexerThreads int
 
 	// 排序器的信道缓冲长度
 	RankerBufLen int
+	//排序器在更改正向索引数据到一定量之后将数据传递到排序器持久化信道的缓冲长度
+	StoreRankerBufLen int
 
 	// 排序器每个 shard 分配的线程数
 	NumRankerThreads int
@@ -155,5 +161,13 @@ func (options *EngineOpts) Init() {
 
 	if options.StoreShards == 0 {
 		options.StoreShards = defaultStoreShards
+	}
+
+	if options.StoreIndexBufLen==0 {
+		options.StoreIndexBufLen=defaultStoreChanBufLen
+	}
+
+	if options.StoreRankerBufLen==0 {
+		options.StoreRankerBufLen=defaultStoreChanBufLen
 	}
 }

@@ -15,14 +15,11 @@
 package riot
 
 import (
-	"bytes"
+
 	"log"
 	"os"
 	"strings"
 
-	"encoding/gob"
-
-	"github.com/go-ego/murmur"
 	"riot/core"
 	"riot/types"
 	toml "github.com/go-vgo/gt/conf"
@@ -105,7 +102,7 @@ func NewEngine(conf ...interface{}) *Engine {
 // HasDoc if the document is exist return true
 func (engine *Engine) HasDoc(docId string) bool {
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		engine.indexers = append(engine.indexers, core.Indexer{})
+		engine.indexers = append(engine.indexers, &core.Indexer{})
 
 		has := engine.indexers[shard].HasDoc(docId)
 
@@ -117,74 +114,74 @@ func (engine *Engine) HasDoc(docId string) bool {
 	return false
 }
 
-// HasDocDB if the document is exist in the database
-// return true
-func (engine *Engine) HasDocDB(docId string) bool {
-	shard := murmur.Sum32(docId) % uint32(engine.initOptions.StoreShards)
-
-	has, err := engine.dbs[shard].Has([]byte(docId))
-	if err != nil {
-		log.Println("engine.dbs[shard].Has(b[0:length]): ", err)
-	}
-
-	return has
-}
-
-// GetDBAllIds get all the DocId from the storage database
-// and return
-// 从数据库遍历所有的 DocId, 并返回
-func (engine *Engine) GetDBAllIds() []string {
-	docsId := make([]string, 0)
-
-	for i := range engine.dbs {
-		engine.dbs[i].ForEach(func(k, v []byte) error {
-			// fmt.Println(k, v)
-			docsId = append(docsId, string(k))
-			return nil
-		})
-	}
-
-	return docsId
-}
-
-// GetDBAllDocs get the db all docs
-func (engine *Engine) GetDBAllDocs() (docsId []string, docsData []types.DocData) {
-	for i := range engine.dbs {
-		engine.dbs[i].ForEach(func(key, val []byte) error {
-			// fmt.Println(k, v)
-			docsId = append(docsId, string(key))
-
-			buf := bytes.NewReader(val)
-			dec := gob.NewDecoder(buf)
-
-			var data types.DocData
-			err := dec.Decode(&data)
-			if err != nil {
-				log.Println("dec.decode: ", err)
-			}
-
-			docsData = append(docsData, data)
-
-			return nil
-		})
-	}
-
-	return docsId, docsData
-}
-
-// GetAllDocIds get all the DocId from the storage database
-// and return
-// 从数据库遍历所有的 DocId, 并返回
-func (engine *Engine) GetAllDocIds() []string {
-	return engine.GetDBAllIds()
-}
-
-// Try handler(err)
-func Try(fun func(), handler func(interface{})) {
-	defer func() {
-		if err := recover(); err != nil {
-			handler(err)
-		}
-	}()
-	fun()
-}
+//// HasDocDB if the document is exist in the database
+//// return true
+//func (engine *Engine) HasDocDB(docId string) bool {
+//	shard := murmur.Sum32(docId) % uint32(engine.initOptions.StoreShards)
+//
+//	has, err := engine.dbs[shard].Has([]byte(docId))
+//	if err != nil {
+//		log.Println("engine.dbs[shard].Has(b[0:length]): ", err)
+//	}
+//
+//	return has
+//}
+//
+//// GetDBAllIds get all the DocId from the storage database
+//// and return
+//// 从数据库遍历所有的 DocId, 并返回
+//func (engine *Engine) GetDBAllIds() []string {
+//	docsId := make([]string, 0)
+//
+//	for i := range engine.dbs {
+//		engine.dbs[i].ForEach(func(k, v []byte) error {
+//			// fmt.Println(k, v)
+//			docsId = append(docsId, string(k))
+//			return nil
+//		})
+//	}
+//
+//	return docsId
+//}
+//
+//// GetDBAllDocs get the db all docs
+//func (engine *Engine) GetDBAllDocs() (docsId []string, docsData []types.DocData) {
+//	for i := range engine.dbs {
+//		engine.dbs[i].ForEach(func(key, val []byte) error {
+//			// fmt.Println(k, v)
+//			docsId = append(docsId, string(key))
+//
+//			buf := bytes.NewReader(val)
+//			dec := gob.NewDecoder(buf)
+//
+//			var data types.DocData
+//			err := dec.Decode(&data)
+//			if err != nil {
+//				log.Println("dec.decode: ", err)
+//			}
+//
+//			docsData = append(docsData, data)
+//
+//			return nil
+//		})
+//	}
+//
+//	return docsId, docsData
+//}
+//
+//// GetAllDocIds get all the DocId from the storage database
+//// and return
+//// 从数据库遍历所有的 DocId, 并返回
+//func (engine *Engine) GetAllDocIds() []string {
+//	return engine.GetDBAllIds()
+//}
+//
+//// Try handler(err)
+//func Try(fun func(), handler func(interface{})) {
+//	defer func() {
+//		if err := recover(); err != nil {
+//			handler(err)
+//		}
+//	}()
+//	fun()
+//}

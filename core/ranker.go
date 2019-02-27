@@ -22,6 +22,7 @@ import (
 	"riot/store"
 	"sort"
 	"sync"
+	"time"
 
 	"riot/types"
 	"riot/utils"
@@ -44,7 +45,7 @@ type Ranker struct {
 	shardNumber int
 
 	dbRankerIndex store.Store
-	storeAddRankerIndexChan	  chan StoreRankerIndexReq
+	storeUpdateRankerIndexChan	  chan StoreRankerIndexReq
 }
 
 //静态持久化恢复时读出的结构体类型
@@ -64,7 +65,7 @@ type StoreRankerIndexReq struct {
 
 
 // Init init ranker
-func (ranker *Ranker) Init(shard int,onlyID bool) {
+func (ranker *Ranker) Init(shard int,StoreRankerBufLen int,onlyID bool) {
 	if ranker.initialized == true {
 		log.Fatal("The Ranker can not be initialized twice.")
 	}
@@ -77,12 +78,25 @@ func (ranker *Ranker) Init(shard int,onlyID bool) {
 
 	ranker.lock.fields = make(map[string]interface{})
 	ranker.lock.docs = make(map[string]bool)
-
+	ranker.shardNumber=shard
+	ranker.storeUpdateRankerIndexChan=make(chan StoreRankerIndexReq,StoreRankerBufLen)
 	//if !ranker.idOnly {
 	//	// new
 	//	ranker.lock.content = make(map[string]string)
 	//	ranker.lock.attri = make(map[string]interface{})
 	//}
+}
+
+func (ranker *Ranker) GetRankerIndexDB() store.Store {
+	return ranker.dbRankerIndex
+}
+
+func (ranker *Ranker)OpenRankerIndexDB(dbPath string,StoreEngine string)  {
+	var erropen error
+	ranker.dbRankerIndex,erropen=store.OpenStore(dbPath,StoreEngine)
+	if ranker.dbRankerIndex==nil||erropen!=nil {
+		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
+	}
 }
 
 func (ranker *Ranker)StoreRecoverRanker(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
@@ -94,7 +108,7 @@ func (ranker *Ranker)StoreRecoverRanker(dbPath string,StoreEngine string, wg *sy
 	if ranker.dbRankerIndex==nil||erropen!=nil {
 		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
 	}
-	defer ranker.dbRankerIndex.Close()
+	//defer ranker.dbRankerIndex.Close()
 	ranker.dbRankerIndex.ForEach(func(k, v []byte) error {
 		key, value := k, v
 		// 得到docID
@@ -118,6 +132,22 @@ func (ranker *Ranker)StoreRecoverRanker(dbPath string,StoreEngine string, wg *sy
 	wg.Done()
 }
 
+func (ranker *Ranker) StoreUpdateRankerIndexWorker() {
+	if ranker.dbRankerIndex==nil {
+		log.Fatalf("ranker %v dbRankerIndex is not open",ranker.shardNumber)
+	}
+	for {
+		request:=<-ranker.storeUpdateRankerIndexChan
+		buf:=bytes.Buffer{}
+		enc:=gob.NewEncoder(&buf)
+		enc.Encode(StoreRankerIndex{
+			docExist:request.DocExist,
+			field:request.Field,
+		})
+		ranker.dbRankerIndex.Set([]byte(request.DocID),buf.Bytes())
+	}
+}
+
 
 // AddDoc add doc
 // 给某个文档添加评分字段
@@ -131,20 +161,19 @@ func (ranker *Ranker) AddDoc(
 	ranker.lock.Lock()
 	ranker.lock.fields[docId] = fields
 	ranker.lock.docs[docId] = true
-
-	//if !ranker.idOnly {
-	//	// new
-	//	if len(content) > 0 {
-	//		ranker.lock.content[docId] = content[0].(string)
-	//	}
-	//
-	//	if len(content) > 1 {
-	//		ranker.lock.attri[docId] = content[1]
-	//		// ranker.lock.attri[docId] = attri
-	//	}
-	//}
-
 	ranker.lock.Unlock()
+
+	timer:=time.NewTimer(time.Millisecond*10)
+	select {
+	case ranker.storeUpdateRankerIndexChan<-StoreRankerIndexReq{
+		DocID:docId,
+		DocExist:true,
+		Field:fields,
+	}:
+		log.Println("a ranker line is send to rankerstore")
+	case <-timer.C:
+		log.Println("timeout")
+	}
 }
 
 // RemoveDoc 删除某个文档的评分字段
