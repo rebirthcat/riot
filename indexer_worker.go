@@ -18,7 +18,7 @@ package riot
 import (
 	"sync/atomic"
 
-	"github.com/rebirthcat/riot/types"
+	"riot/types"
 )
 
 type indexerAddDocReq struct {

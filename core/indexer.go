@@ -28,8 +28,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/rebirthcat/riot/types"
-	"github.com/rebirthcat/riot/utils"
+	"riot/types"
+	"riot/utils"
 )
 
 

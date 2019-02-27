@@ -16,7 +16,7 @@
 package types
 
 import (
-	"github.com/rebirthcat/riot/utils"
+	"riot/utils"
 )
 
 // BaseResp search response options
