@@ -78,8 +78,8 @@ type Engine struct {
 	initOptions types.EngineOpts
 	initialized bool
 
-	indexers   []*core.Indexer
-	rankers    []*core.Ranker
+	indexers   []core.Indexer
+	rankers    []core.Ranker
 	segmenter  gse.Segmenter
 	loaded     bool
 	stopTokens StopTokens
