@@ -22,14 +22,11 @@ package riot
 import (
 	"fmt"
 	"log"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"sync/atomic"
 
 	"riot/core"
 	"riot/types"
@@ -64,12 +61,12 @@ type Engine struct {
 
 	// 计数器，用来统计有多少文档被索引等信息
 	numDocsIndexed      uint64
-	numDocsRemoved      uint64
-	numDocsForceUpdated uint64
+	//numDocsRemoved      uint64
+	//numDocsForceUpdated uint64
 
-	numIndexingReqs      uint64
-	numRemovingReqs      uint64
-	numForceUpdatingReqs uint64
+	//numIndexingReqs      uint64
+	//numRemovingReqs      uint64
+	//numForceUpdatingReqs uint64
 	numTokenIndexAdded   uint64
 	numDocsStored        uint64
 
@@ -86,12 +83,12 @@ type Engine struct {
 	segmenterChan         chan segmenterReq
 	indexerAddDocChans    []chan indexerAddDocReq
 	indexerRemoveDocChans []chan indexerRemoveDocReq
-	rankerAddDocChans     []chan rankerAddDocReq
+	//rankerAddDocChans     []chan rankerAddDocReq
 
 	// 建立排序器使用的通信通道
 	indexerLookupChans   []chan indexerLookupReq
 	rankerRankChans      []chan rankerRankReq
-	rankerRemoveDocChans []chan rankerRemoveDocReq
+	//rankerRemoveDocChans []chan rankerRemoveDocReq
 }
 
 
@@ -120,24 +117,24 @@ func (engine *Engine) Indexer(options types.EngineOpts) {
 
 // Ranker initialize the ranker channel
 func (engine *Engine) Ranker(options types.EngineOpts) {
-	engine.rankerAddDocChans = make(
-		[]chan rankerAddDocReq, options.NumShards)
+	//engine.rankerAddDocChans = make(
+	//	[]chan rankerAddDocReq, options.NumShards)
 
 	engine.rankerRankChans = make(
 		[]chan rankerRankReq, options.NumShards)
 
-	engine.rankerRemoveDocChans = make(
-		[]chan rankerRemoveDocReq, options.NumShards)
+	//engine.rankerRemoveDocChans = make(
+	//	[]chan rankerRemoveDocReq, options.NumShards)
 
 	for shard := 0; shard < options.NumShards; shard++ {
-		engine.rankerAddDocChans[shard] = make(
-			chan rankerAddDocReq, options.RankerBufLen)
+		//engine.rankerAddDocChans[shard] = make(
+		//	chan rankerAddDocReq, options.RankerBufLen)
 
 		engine.rankerRankChans[shard] = make(
 			chan rankerRankReq, options.RankerBufLen)
 
-		engine.rankerRemoveDocChans[shard] = make(
-			chan rankerRemoveDocReq, options.RankerBufLen)
+		//engine.rankerRemoveDocChans[shard] = make(
+		//	chan rankerRemoveDocReq, options.RankerBufLen)
 	}
 }
 
@@ -286,7 +283,7 @@ func (engine *Engine) Init(options types.EngineOpts) {
 
 
 
-	atomic.AddUint64(&engine.numDocsStored, engine.numIndexingReqs)
+	//atomic.AddUint64(&engine.numDocsStored, engine.numIndexingReqs)
 }
 
 // IndexDoc add the document to the index
@@ -336,13 +333,13 @@ func (engine *Engine) internalIndexDoc(docId string, data types.DocData,
 	if !engine.initialized {
 		log.Fatal("The engine must be initialized first.")
 	}
-
-	if docId != "0" {
-		atomic.AddUint64(&engine.numIndexingReqs, 1)
-	}
-	if forceUpdate {
-		atomic.AddUint64(&engine.numForceUpdatingReqs, 1)
-	}
+	//
+	//if docId != "0" {
+	//	atomic.AddUint64(&engine.numIndexingReqs, 1)
+	//}
+	//if forceUpdate {
+	//	atomic.AddUint64(&engine.numForceUpdatingReqs, 1)
+	//}
 
 	hash := murmur.Sum32(fmt.Sprintf("%s%s", docId, data.Content))
 	engine.segmenterChan <- segmenterReq{
@@ -370,22 +367,22 @@ func (engine *Engine) RemoveDoc(docId string, forceUpdate ...bool) {
 		log.Fatal("The engine must be initialized first.")
 	}
 
-	if docId != "0" {
-		atomic.AddUint64(&engine.numRemovingReqs, 1)
-	}
-
-	if force {
-		atomic.AddUint64(&engine.numForceUpdatingReqs, 1)
-	}
+	//if docId != "0" {
+	//	atomic.AddUint64(&engine.numRemovingReqs, 1)
+	//}
+	//
+	//if force {
+	//	atomic.AddUint64(&engine.numForceUpdatingReqs, 1)
+	//}
 
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		engine.indexerRemoveDocChans[shard] <- indexerRemoveDocReq{
 			docId: docId, forceUpdate: force}
 
-		if docId == "0" {
-			continue
-		}
-		engine.rankerRemoveDocChans[shard] <- rankerRemoveDocReq{docId: docId}
+		//if docId == "0" {
+		//	continue
+		//}
+		//engine.rankerRemoveDocChans[shard] <- rankerRemoveDocReq{docId: docId}
 	}
 
 	//if engine.initOptions.UseStore && docId != "0" {
@@ -744,35 +741,35 @@ func (engine *Engine) Search(request types.SearchReq) (output types.SearchResp) 
 // Flush block wait until all indexes are added
 // 阻塞等待直到所有索引添加完毕
 func (engine *Engine) Flush() {
-	for {
-		runtime.Gosched()
-
-		inxd := engine.numIndexingReqs == atomic.LoadUint64(&engine.numDocsIndexed)
-		numRm := engine.numRemovingReqs * uint64(engine.initOptions.NumShards)
-		rmd := numRm == atomic.LoadUint64(&engine.numDocsRemoved)
-
-		nums := engine.numIndexingReqs == atomic.LoadUint64(&engine.numDocsStored)
-		stored := !engine.initOptions.UseStore || nums
-
-		if inxd && rmd && stored {
-			// 保证 CHANNEL 中 REQUESTS 全部被执行完
-			break
-		}
-	}
-
-	// 强制更新，保证其为最后的请求
-	engine.IndexDoc("0", types.DocData{}, true)
-	for {
-		runtime.Gosched()
-
-		numf := engine.numForceUpdatingReqs * uint64(engine.initOptions.NumShards)
-		forced := numf == atomic.LoadUint64(&engine.numDocsForceUpdated)
-
-		if forced {
-			return
-		}
-
-	}
+	//for {
+	//	runtime.Gosched()
+	//
+	//	inxd := engine.numIndexingReqs == atomic.LoadUint64(&engine.numDocsIndexed)
+	//	numRm := engine.numRemovingReqs * uint64(engine.initOptions.NumShards)
+	//	rmd := numRm == atomic.LoadUint64(&engine.numDocsRemoved)
+	//
+	//	nums := engine.numIndexingReqs == atomic.LoadUint64(&engine.numDocsStored)
+	//	stored := !engine.initOptions.UseStore || nums
+	//
+	//	if inxd && rmd && stored {
+	//		// 保证 CHANNEL 中 REQUESTS 全部被执行完
+	//		break
+	//	}
+	//}
+	//
+	//// 强制更新，保证其为最后的请求
+	//engine.IndexDoc("0", types.DocData{}, true)
+	//for {
+	//	runtime.Gosched()
+	//
+	//	numf := engine.numForceUpdatingReqs * uint64(engine.initOptions.NumShards)
+	//	forced := numf == atomic.LoadUint64(&engine.numDocsForceUpdated)
+	//
+	//	if forced {
+	//		return
+	//	}
+	//
+	//}
 }
 
 // FlushIndex block wait until all indexes are added

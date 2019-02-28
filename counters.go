@@ -26,9 +26,9 @@ func (engine *Engine) NumIndexed() uint64 {
 }
 
 // NumRemoved documents removed number
-func (engine *Engine) NumRemoved() uint64 {
-	return engine.numDocsRemoved
-}
+//func (engine *Engine) NumRemoved() uint64 {
+//	return engine.numDocsRemoved
+//}
 
 // NumTokenIndexAdded added token index number, deprecated
 func (engine *Engine) NumTokenIndexAdded() uint64 {
@@ -41,6 +41,6 @@ func (engine *Engine) NumDocsIndexed() uint64 {
 }
 
 // NumDocsRemoved documents removed number, deprecated
-func (engine *Engine) NumDocsRemoved() uint64 {
-	return engine.numDocsRemoved
-}
+//func (engine *Engine) NumDocsRemoved() uint64 {
+//	return engine.numDocsRemoved
+//}
