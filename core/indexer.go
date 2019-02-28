@@ -25,6 +25,7 @@ import (
 	"riot/store"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"riot/types"
@@ -40,6 +41,15 @@ type Indexer struct {
 		sync.RWMutex
 		table     map[string]*KeywordIndices
 		docsState map[string]int // nil: 表示无状态记录，0: 存在于索引中，1: 等待删除，2: 等待加入
+		// 这实际上是总文档数的一个近似
+		numDocs uint64
+		// docIDs *hset.Hset
+
+		// 所有被索引文本的总关键词数
+		totalTokenLen float32
+
+		// 每个文档的关键词长度
+		docTokenLens map[string]float32
 	}
 
 	addCacheLock struct {
@@ -57,15 +67,7 @@ type Indexer struct {
 	initOptions types.IndexerOpts
 	initialized bool
 
-	// 这实际上是总文档数的一个近似
-	numDocs uint64
-	// docIDs *hset.Hset
 
-	// 所有被索引文本的总关键词数
-	totalTokenLen float32
-
-	// 每个文档的关键词长度
-	docTokenLens map[string]float32
 
 	shardNumber int
 	//正向索引持久化静态恢复接口
@@ -76,6 +78,8 @@ type Indexer struct {
 	dbRevertIndex   store.Store
 	//反向索引持久化动态更新管道
 	storeUpdateReverseIndexChan    chan StoreReverseIndexReq
+	//表示保存在持久化文件中的文档树量(因为该值只做统计使用，不参与搜索的bm25的计算，所以不适合放到tableLock里)
+	numDocsStore	uint64
 }
 
 // KeywordIndices 反向索引表的一行，收集了一个搜索键出现的所有文档，按照DocId从小到大排序。
@@ -84,6 +88,29 @@ type KeywordIndices struct {
 	docIds      []string  // 全部类型都有
 	frequencies []float32 // IndexType == FrequenciesIndex
 	locations   [][]int   // IndexType == LocsIndex
+}
+
+func (indexer *Indexer)GetTableLen()uint64  {
+	indexer.tableLock.RLock()
+	defer indexer.tableLock.RUnlock()
+	return uint64(len(indexer.tableLock.table))
+}
+
+func (indexer *Indexer)GetNumDocsStore() uint64 {
+	return atomic.LoadUint64(&indexer.numDocsStore)
+}
+
+
+func (indexer *Indexer)GetNumDocs()uint64  {
+	indexer.tableLock.RLock()
+	defer indexer.tableLock.RUnlock()
+	return indexer.tableLock.numDocs
+}
+
+func (indexer *Indexer)GetNumTotalTokenLen()uint64  {
+	indexer.tableLock.RLock()
+	defer indexer.tableLock.RUnlock()
+	return uint64(indexer.tableLock.totalTokenLen)
 }
 
 
@@ -103,7 +130,7 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.Indexe
 
 	indexer.removeCacheLock.removeCache = make(
 		[]string, indexer.initOptions.DocCacheSize*2)
-	indexer.docTokenLens = make(map[string]float32)
+	indexer.tableLock.docTokenLens = make(map[string]float32)
 
 	indexer.storeUpdateForwardIndexChan=make(chan StoreForwardIndexReq,StoreChanBufLen)
 	indexer.storeUpdateReverseIndexChan=make(chan StoreReverseIndexReq,StoreChanBufLen)
@@ -117,6 +144,8 @@ func (indexer *Indexer) getDocId(ti *KeywordIndices, i int) string {
 
 // HasDoc doc is exist return true
 func (indexer *Indexer) HasDoc(docId string) bool {
+	indexer.tableLock.RLock()
+	defer indexer.tableLock.RUnlock()
 	docState, ok := indexer.tableLock.docsState[docId]
 	if ok && docState == 0 {
 		return true
@@ -168,7 +197,7 @@ func (indexer *Indexer) AddDocToCache(doc *types.DocIndex, forceUpdate bool) {
 					indexer.removeCacheLock.Unlock()
 
 					indexer.tableLock.docsState[docIndex.DocId] = 1
-					indexer.numDocs--
+					//indexer.numDocs--
 				}
 				position++
 			} else if !ok {
@@ -220,8 +249,8 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 		// 更新文档关键词总长度
 		var timer *time.Timer
 		if doc.TokenLen != 0 {
-			indexer.docTokenLens[doc.DocId] = float32(doc.TokenLen)
-			indexer.totalTokenLen += doc.TokenLen
+			indexer.tableLock.docTokenLens[doc.DocId] = float32(doc.TokenLen)
+			indexer.tableLock.totalTokenLen += doc.TokenLen
 			indexer.ranker.lock.Lock()
 			indexer.ranker.lock.docs[doc.DocId]=true
 			indexer.ranker.lock.fields[doc.DocId]=doc.Field
@@ -299,7 +328,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 		// 更新文章状态和总数
 		if docIdIsNew {
 			indexer.tableLock.docsState[doc.DocId] = 0
-			indexer.numDocs++
+			indexer.tableLock.numDocs++
 		}
 	}
 }
@@ -319,7 +348,7 @@ func (indexer *Indexer) RemoveDocToCache(docId string, forceUpdate bool) bool {
 			indexer.removeCacheLock.removeCache[indexer.removeCacheLock.removeCachePointer] = docId
 			indexer.removeCacheLock.removeCachePointer++
 			indexer.tableLock.docsState[docId] = 1
-			indexer.numDocs--
+			//indexer.numDocs--
 		} else if ok && docState == 2 {
 			// 删除一个等待加入的文档
 			indexer.tableLock.docsState[docId] = 1
@@ -356,8 +385,8 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 	// 更新文档关键词总长度，删除文档状态
 	var timer *time.Timer
 	for _, docId := range *docs {
-		indexer.totalTokenLen -= indexer.docTokenLens[docId]
-		delete(indexer.docTokenLens, docId)
+		indexer.tableLock.totalTokenLen -= indexer.tableLock.docTokenLens[docId]
+		delete(indexer.tableLock.docTokenLens, docId)
 		delete(indexer.tableLock.docsState, docId)
 		//持久化
 		timer=time.NewTimer(time.Millisecond*10)
@@ -463,7 +492,7 @@ func (indexer *Indexer) Lookup(
 	indexer.tableLock.RLock()
 	defer indexer.tableLock.RUnlock()
 
-	if indexer.numDocs == 0 {
+	if indexer.tableLock.numDocs == 0 {
 		return
 	}
 
@@ -526,7 +555,7 @@ func (indexer *Indexer) internalLookup(
 	}
 
 	// 平均文本关键词长度，用于计算BM25
-	avgDocLength := indexer.totalTokenLen / float32(indexer.numDocs)
+	avgDocLength := indexer.tableLock.totalTokenLen / float32(indexer.tableLock.numDocs)
 	for ; indexPointers[0] >= 0; indexPointers[0]-- {
 		// 以第一个搜索键出现的文档作为基准，并遍历其他搜索键搜索同一文档
 		baseDocId := indexer.getDocId(table[0], indexPointers[0])
@@ -608,7 +637,7 @@ func (indexer *Indexer) internalLookup(
 			if indexer.initOptions.IndexType == types.LocsIndex ||
 				indexer.initOptions.IndexType == types.FrequenciesIndex {
 				bm25 := float32(0)
-				d := indexer.docTokenLens[baseDocId]
+				d := indexer.tableLock.docTokenLens[baseDocId]
 				for i, t := range table[:len(tokens)] {
 					var frequency float32
 					if indexer.initOptions.IndexType == types.LocsIndex {
@@ -621,7 +650,7 @@ func (indexer *Indexer) internalLookup(
 					if len(t.docIds) > 0 && frequency > 0 &&
 						indexer.initOptions.BM25Parameters != nil && avgDocLength != 0 {
 						// 带平滑的 idf
-						idf := float32(math.Log2(float64(indexer.numDocs)/float64(len(t.docIds)) + 1))
+						idf := float32(math.Log2(float64(indexer.tableLock.numDocs)/float64(len(t.docIds)) + 1))
 						k1 := indexer.initOptions.BM25Parameters.K1
 						b := indexer.initOptions.BM25Parameters.B
 						bm25 += idf * frequency * (k1 + 1) / (frequency + k1*(1-b+b*d/avgDocLength))

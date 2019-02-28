@@ -114,6 +114,41 @@ func (engine *Engine) HasDoc(docId string) bool {
 	return false
 }
 
+//得到当前内存中被索引的文档数量
+func (engine *Engine)GetNumDocsIndexed() uint64 {
+	var num uint64
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		num+=engine.indexers[shard].GetNumDocs()
+	}
+	return num
+}
+//得到内存中所有关键词数量（有重复）
+func (engine *Engine)GetNumTokenIndexAdded() uint64 {
+	var num uint64
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		num+=engine.indexers[shard].GetNumTotalTokenLen()
+	}
+	return num
+}
+
+//得到当前持久化数据库中有多少被索引的文档的数量
+func (engine *Engine)GetNumDocsStored() uint64  {
+	var num uint64
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		num+=engine.indexers[shard].GetNumDocsStore()
+	}
+	return num
+}
+//得到关键词总数（不重复）
+func (engine *Engine)GetNumReverseTableLen()uint64  {
+	var num uint64
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		num+=engine.indexers[shard].GetTableLen()
+	}
+	return num
+
+}
+
 //// HasDocDB if the document is exist in the database
 //// return true
 //func (engine *Engine) HasDocDB(docId string) bool {

@@ -6,6 +6,7 @@ import (
 	"log"
 	"riot/store"
 	"sync"
+	"sync/atomic"
 )
 
 //系统重启时从持久化文件中读出来的一行数据所反序列化得到的类型
@@ -91,16 +92,18 @@ func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string
 		return nil
 	})
 	//恢复indexer
-	indexer.totalTokenLen=totalTokenLen
-	indexer.numDocs=numDocs
-	indexer.docTokenLens=docTokenLens
 	indexer.tableLock.Lock()
+	defer indexer.tableLock.Unlock()
+	indexer.tableLock.totalTokenLen=totalTokenLen
+	indexer.tableLock.numDocs=numDocs
+	indexer.tableLock.docTokenLens=docTokenLens
 	indexer.tableLock.docsState=docsState
-	indexer.tableLock.Unlock()
+	atomic.AddUint64(&indexer.numDocsStore,numDocs)
+
 	indexer.ranker.lock.Lock()
+	defer indexer.ranker.lock.Unlock()
 	indexer.ranker.lock.fields=fields
 	indexer.ranker.lock.docs=docsExist
-	indexer.ranker.lock.Unlock()
 	wg.Done()
 }
 
@@ -130,8 +133,8 @@ func (indexer *Indexer)StoreRecoverReverseIndex(dbPath string,StoreEngine string
 		return nil
 	})
 	indexer.tableLock.Lock()
+	defer indexer.tableLock.Unlock()
 	indexer.tableLock.table=table
-	indexer.tableLock.Unlock()
 	wg.Done()
 }
 
@@ -149,6 +152,7 @@ func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
 		//如果传过来的持久化请求中的DocTokenLen小于0,则是删除请求，即从RemoveDocs（）函数中传过来的
 		if request.DocTokenLen<0 {
 			indexer.dbforwardIndex.Delete([]byte(request.DocID))
+			atomic.AddUint64(&indexer.numDocsStore,^uint64(1-1))
 			continue
 		}else {
 			buf:=bytes.Buffer{}
@@ -158,6 +162,7 @@ func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
 				field:request.Field,
 			})
 			indexer.dbforwardIndex.Set([]byte(request.DocID),buf.Bytes())
+			atomic.AddUint64(&indexer.numDocsStore,1)
 		}
 
 	}

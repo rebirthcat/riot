@@ -226,20 +226,22 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	wg.Add(options.NumShards*2)
 	for shard := 0; shard < options.NumShards; shard++ {
 		engine.rankers = append(engine.rankers, &core.Ranker{})
-		engine.rankers[shard].Init(shard,options.StoreRankerBufLen,options.IDOnly)
+		engine.rankers[shard].Init(shard,options.IDOnly)
 		engine.indexers = append(engine.indexers, &core.Indexer{})
 		engine.indexers[shard].Init(shard,options.StoreIndexBufLen, *options.IndexerOpts,engine.rankers[shard])
 		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
-		//dbPathRankerIndex := engine.initOptions.StoreFolder + "/" +
-		//	StoreFilePrefix + ".rankerindex." + strconv.Itoa(shard)
 		go engine.indexers[shard].StoreRecoverForwardIndex(dbPathForwardIndex,engine.initOptions.StoreEngine,&wg)
 		go engine.indexers[shard].StoreRecoverReverseIndex(dbPathReverseIndex,engine.initOptions.StoreEngine,&wg)
-		//go engine.rankers[shard].StoreRecoverRanker(dbPathRankerIndex,engine.initOptions.StoreEngine,&wg)
 	}
 	wg.Wait()
+	for _, indexer := range engine.indexers {
+		engine.numDocsIndexed+=indexer.GetNumDocs()
+		engine.numTokenIndexAdded+=indexer.GetNumTotalTokenLen()
+		engine.numDocsStored+=indexer.GetNumDocsStore()
+	}
 	// 初始化分词器通道
 	engine.segmenterChan = make(
 		chan segmenterReq, options.NumGseThreads)
@@ -253,10 +255,6 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	// engine.CheckMem(engine.initOptions.UseStore)
 	engine.CheckMem()
 
-	// 初始化持久化存储通道
-	//if engine.initOptions.UseStore {
-	//	engine.InitStore()
-	//}
 
 	// 启动分词器
 	for iThread := 0; iThread < options.NumGseThreads; iThread++ {

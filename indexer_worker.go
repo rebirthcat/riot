@@ -16,8 +16,6 @@
 package riot
 
 import (
-	"sync/atomic"
-
 	"riot/types"
 )
 
@@ -53,12 +51,12 @@ func (engine *Engine) indexerAddDoc(shard int) {
 	for {
 		request := <-engine.indexerAddDocChans[shard]
 		engine.indexers[shard].AddDocToCache(request.doc, request.forceUpdate)
-		if request.doc != nil {
-			atomic.AddUint64(&engine.numTokenIndexAdded,
-				uint64(len(request.doc.Keywords)))
-
-			atomic.AddUint64(&engine.numDocsIndexed, 1)
-		}
+		//if request.doc != nil {
+		//	atomic.AddUint64(&engine.numTokenIndexAdded,
+		//		uint64(len(request.doc.Keywords)))
+		//
+		//	//atomic.AddUint64(&engine.numDocsIndexed, 1)
+		//}
 		//if request.forceUpdate {
 		//	atomic.AddUint64(&engine.numDocsForceUpdated, 1)
 		//}

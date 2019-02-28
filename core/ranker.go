@@ -37,7 +37,7 @@ type Ranker struct {
 }
 
 // Init init ranker
-func (ranker *Ranker) Init(shard int,StoreRankerBufLen int,onlyID bool) {
+func (ranker *Ranker) Init(shard int,onlyID bool) {
 	if ranker.initialized == true {
 		log.Fatal("The Ranker can not be initialized twice.")
 	}
