@@ -45,17 +45,17 @@ type rankerRemoveDocReq struct {
 	docId string
 }
 
-func (engine *Engine) rankerAddDoc(shard int) {
-	for {
-		request := <-engine.rankerAddDocChans[shard]
-		if engine.initOptions.IDOnly {
-			engine.rankers[shard].AddDoc(request.docId, request.fields)
-		} else {
-			engine.rankers[shard].AddDoc(request.docId, request.fields,
-				request.content, request.attri)
-		}
-	}
-}
+//func (engine *Engine) rankerAddDoc(shard int) {
+//	for {
+//		request := <-engine.rankerAddDocChans[shard]
+//		if engine.initOptions.IDOnly {
+//			engine.rankers[shard].AddDoc(request.docId, request.fields)
+//		} else {
+//			engine.rankers[shard].AddDoc(request.docId, request.fields,
+//				request.content, request.attri)
+//		}
+//	}
+//}
 
 func (engine *Engine) rankerRank(shard int) {
 	for {
@@ -72,9 +72,9 @@ func (engine *Engine) rankerRank(shard int) {
 	}
 }
 
-func (engine *Engine) rankerRemoveDoc(shard int) {
-	for {
-		request := <-engine.rankerRemoveDocChans[shard]
-		engine.rankers[shard].RemoveDoc(request.docId)
-	}
-}
+//func (engine *Engine) rankerRemoveDoc(shard int) {
+//	for {
+//		request := <-engine.rankerRemoveDocChans[shard]
+//		engine.rankers[shard].RemoveDoc(request.docId)
+//	}
+//}

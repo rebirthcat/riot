@@ -29,6 +29,8 @@ type DocIndex struct {
 
 	// Keywords 加入的索引键
 	Keywords []KeywordIndex
+
+	Field  interface{}
 }
 
 // KeywordIndex 反向索引项，这实际上标注了一个（搜索键，文档）对。

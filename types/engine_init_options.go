@@ -80,7 +80,7 @@ type EngineOpts struct {
 	// 索引器的信道缓冲长度
 	IndexerBufLen int
 
-	//索引器将索引增加请求传递到持久化信道的缓冲长度
+	//索引器持久化信道的缓冲长度
 	StoreIndexBufLen int
 
 	// 索引器每个shard分配的线程数
@@ -88,7 +88,7 @@ type EngineOpts struct {
 
 	// 排序器的信道缓冲长度
 	RankerBufLen int
-	//排序器在更改正向索引数据到一定量之后将数据传递到排序器持久化信道的缓冲长度
+	//排序器持久化信道的缓冲长度
 	StoreRankerBufLen int
 
 	// 排序器每个 shard 分配的线程数

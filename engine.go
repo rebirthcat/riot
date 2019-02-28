@@ -226,21 +226,21 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	// 初始化索引器和排序器
 	// 启动每个索引器内部的正向索引恢复协程和反向索引恢复协程，启动每个排序器内部索引恢复协程，并阻塞等待所有协助全部执行完毕
 	wg:=sync.WaitGroup{}
-	wg.Add(options.NumShards*3)
+	wg.Add(options.NumShards*2)
 	for shard := 0; shard < options.NumShards; shard++ {
-		engine.indexers = append(engine.indexers, &core.Indexer{})
-		engine.indexers[shard].Init(shard,options.StoreIndexBufLen, *options.IndexerOpts)
 		engine.rankers = append(engine.rankers, &core.Ranker{})
 		engine.rankers[shard].Init(shard,options.StoreRankerBufLen,options.IDOnly)
+		engine.indexers = append(engine.indexers, &core.Indexer{})
+		engine.indexers[shard].Init(shard,options.StoreIndexBufLen, *options.IndexerOpts,engine.rankers[shard])
 		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
-		dbPathRankerIndex := engine.initOptions.StoreFolder + "/" +
-			StoreFilePrefix + ".rankerindex." + strconv.Itoa(shard)
+		//dbPathRankerIndex := engine.initOptions.StoreFolder + "/" +
+		//	StoreFilePrefix + ".rankerindex." + strconv.Itoa(shard)
 		go engine.indexers[shard].StoreRecoverForwardIndex(dbPathForwardIndex,engine.initOptions.StoreEngine,&wg)
 		go engine.indexers[shard].StoreRecoverReverseIndex(dbPathReverseIndex,engine.initOptions.StoreEngine,&wg)
-		go engine.rankers[shard].StoreRecoverRanker(dbPathRankerIndex,engine.initOptions.StoreEngine,&wg)
+		//go engine.rankers[shard].StoreRecoverRanker(dbPathRankerIndex,engine.initOptions.StoreEngine,&wg)
 	}
 	wg.Wait()
 	// 初始化分词器通道
@@ -272,8 +272,8 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		go engine.indexerRemoveDoc(shard)
 		go engine.indexers[shard].StoreUpdateForWardIndexWorker()
 		go engine.indexers[shard].StoreUpdateReverseIndexWorker()
-		go engine.rankerAddDoc(shard)
-		go engine.rankerRemoveDoc(shard)
+		//go engine.rankerAddDoc(shard)
+		//go engine.rankerRemoveDoc(shard)
 
 
 		for i := 0; i < options.NumIndexerThreads; i++ {
@@ -793,12 +793,6 @@ func (engine *Engine) Close() {
 			}
 			dbr:=indexer.GetReverseIndexDB()
 			if dbr!=nil {
-				dbr.Close()
-			}
-		}
-		for _, ranker := range engine.rankers {
-			dbr:=ranker.GetRankerIndexDB()
-			if dbr != nil {
 				dbr.Close()
 			}
 		}

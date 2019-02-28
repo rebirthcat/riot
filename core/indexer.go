@@ -20,8 +20,6 @@ Package core is riot core
 package core
 
 import (
-	"bytes"
-	"encoding/gob"
 	"log"
 	"math"
 	"riot/store"
@@ -55,7 +53,7 @@ type Indexer struct {
 		removeCachePointer int
 		removeCache        types.DocsId
 	}
-
+	ranker *Ranker
 	initOptions types.IndexerOpts
 	initialized bool
 
@@ -79,11 +77,6 @@ type Indexer struct {
 	//反向索引持久化动态更新管道
 	storeUpdateReverseIndexChan    chan StoreReverseIndexReq
 }
-//系统重启时从持久化文件中读出来的一行数据所反序列化得到的类型
-type storeForwardIndex struct {
-	//用于恢复docTokenLens map[string]float32
-	tokenLen float32
-}
 
 // KeywordIndices 反向索引表的一行，收集了一个搜索键出现的所有文档，按照DocId从小到大排序。
 type KeywordIndices struct {
@@ -93,19 +86,9 @@ type KeywordIndices struct {
 	locations   [][]int   // IndexType == LocsIndex
 }
 
-//在线持久化请求结构
-type StoreReverseIndexReq struct {
-	Token string
-	KeywordIndices KeywordIndices
-}
-
-type StoreForwardIndexReq struct {
-	DocID string
-	DocTokenLen float32
-}
 
 // Init 初始化索引器
-func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.IndexerOpts) {
+func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.IndexerOpts,ranker *Ranker) {
 	if indexer.initialized == true {
 		log.Fatal("The Indexer can not be initialized twice.")
 	}
@@ -126,141 +109,6 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.Indexe
 	indexer.storeUpdateReverseIndexChan=make(chan StoreReverseIndexReq,StoreChanBufLen)
 	indexer.shardNumber=shard
 }
-
-func (indexer *Indexer) GetForwardIndexDB() store.Store {
-	return indexer.dbforwardIndex
-}
-
-func (indexer *Indexer)GetReverseIndexDB()store.Store  {
-	return indexer.dbRevertIndex
-}
-
-func (indexer *Indexer) OpenForwardIndexDB(dbPath string,StoreEngine string)  {
-	var erropen error
-	indexer.dbforwardIndex, erropen= store.OpenStore(dbPath, StoreEngine)
-	if indexer.dbforwardIndex == nil || erropen != nil {
-		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
-	}
-}
-
-func (indexer *Indexer)OpenReverseIndexDB(dbPath string,StoreEngine string)  {
-	var erropen error
-	indexer.dbRevertIndex,erropen=store.OpenStore(dbPath,StoreEngine)
-	if indexer.dbRevertIndex==nil||erropen!=nil {
-		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
-	}
-}
-
-func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
-	//indexer中的字段
-	numDocs:= uint64(0)
-	totalTokenLen:=float32(0)
-	docsState:=make(map[string]int,numDocs)
-	docTokenLens:=make(map[string]float32,numDocs)
-	var erropen error
-	indexer.dbforwardIndex, erropen= store.OpenStore(dbPath, StoreEngine)
-	if indexer.dbforwardIndex == nil || erropen != nil {
-		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
-	}
-	//defer indexer.dbforwardIndex.Close()
-	indexer.dbforwardIndex.ForEach(func(k, v []byte) error {
-		key, value := k, v
-		// 得到docID
-		keystring := string(key)
-		buf := bytes.NewReader(value)
-		dec := gob.NewDecoder(buf)
-		//正向索引结构
-		var fowardindex storeForwardIndex
-		err := dec.Decode(&fowardindex)
-		if err == nil {
-			docsState[keystring] = 0
-			docTokenLens[keystring] = fowardindex.tokenLen
-			numDocs++
-			totalTokenLen += fowardindex.tokenLen
-		}
-		return nil
-	})
-	//恢复indexer
-	indexer.totalTokenLen=totalTokenLen
-	indexer.numDocs=numDocs
-	indexer.docTokenLens=docTokenLens
-	indexer.tableLock.Lock()
-	indexer.tableLock.docsState=docsState
-	indexer.tableLock.Unlock()
-	wg.Done()
-}
-
-func (indexer *Indexer)StoreRecoverReverseIndex(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
-	table:=make(map[string]*KeywordIndices)
-	var erropen error
-	indexer.dbRevertIndex,erropen=store.OpenStore(dbPath,StoreEngine)
-	if indexer.dbRevertIndex==nil||erropen!=nil {
-		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
-	}
-	//defer indexer.dbRevertIndex.Close()
-	indexer.dbRevertIndex.ForEach(func(k, v []byte) error {
-		key, value := k, v
-		// 得到docID
-		keystring := string(key)
-		buf := bytes.NewReader(value)
-		dec := gob.NewDecoder(buf)
-		//var data types.DocData
-		var keywordIndices KeywordIndices
-		err := dec.Decode(&keywordIndices)
-		if err == nil {
-			// 添加索引
-			table[keystring]=&keywordIndices
-		}
-		return nil
-	})
-	indexer.tableLock.Lock()
-	indexer.tableLock.table=table
-	indexer.tableLock.Unlock()
-	wg.Done()
-}
-
-func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
-	if indexer.dbforwardIndex==nil {
-		log.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
-	}
-	for {
-		request:=<-indexer.storeUpdateForwardIndexChan
-		if indexer.dbforwardIndex==nil {
-			log.Fatalf("indexer %shard_v  dbforwardIndex is not open,updatefailed",indexer.shardNumber)
-		}
-		//如果传过来的持久化请求中的DocTokenLen小于0,则是删除请求，即从RemoveDocs（）函数中传过来的
-		if request.DocTokenLen<0 {
-			indexer.dbforwardIndex.Delete([]byte(request.DocID))
-			continue
-		}else {
-			buf:=bytes.Buffer{}
-			enc:=gob.NewEncoder(&buf)
-			enc.Encode(storeForwardIndex{
-				tokenLen:request.DocTokenLen,
-			})
-			indexer.dbforwardIndex.Set([]byte(request.DocID),buf.Bytes())
-		}
-
-	}
-}
-
-func (indexer *Indexer) StoreUpdateReverseIndexWorker() {
-	if indexer.dbforwardIndex==nil {
-		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
-	}
-	for {
-		request:=<-indexer.storeUpdateReverseIndexChan
-		if indexer.dbRevertIndex==nil {
-			log.Fatalf("indexer shard_%v  dbRevertIndex is not open,updatefailed",indexer.shardNumber)
-		}
-		buf:=bytes.Buffer{}
-		enc:=gob.NewEncoder(&buf)
-		enc.Encode(request.KeywordIndices)
-		indexer.dbRevertIndex.Set([]byte(request.Token),buf.Bytes())
-	}
-}
-
-
 
 // getDocId 从 KeywordIndices 中得到第i个文档的 DocId
 func (indexer *Indexer) getDocId(ti *KeywordIndices, i int) string {
@@ -374,12 +222,17 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 		if doc.TokenLen != 0 {
 			indexer.docTokenLens[doc.DocId] = float32(doc.TokenLen)
 			indexer.totalTokenLen += doc.TokenLen
+			indexer.ranker.lock.Lock()
+			indexer.ranker.lock.docs[doc.DocId]=true
+			indexer.ranker.lock.fields[doc.DocId]=doc.Field
+			indexer.ranker.lock.Unlock()
 			//发送至持久化
 			timer=time.NewTimer(time.Millisecond*10)
 			select {
 			case indexer.storeUpdateForwardIndexChan <- StoreForwardIndexReq{
 				DocID:       doc.DocId,
 				DocTokenLen: doc.TokenLen,
+				Field:doc.Field,
 			}:
 				log.Println("a forwardindex is send to store")
 			case <-timer.C:
@@ -512,6 +365,7 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 		case indexer.storeUpdateForwardIndexChan<-StoreForwardIndexReq{
 			DocID:docId,
 			DocTokenLen:-1,
+			Field:nil,
 		}:
 			log.Println("a forwardindex is send to remove")
 		case <-timer.C:

@@ -16,16 +16,11 @@
 package core
 
 import (
-	"bytes"
-	"encoding/gob"
 	"log"
-	"riot/store"
-	"sort"
-	"sync"
-	"time"
-
 	"riot/types"
 	"riot/utils"
+	"sort"
+	"sync"
 )
 
 // Ranker ranker
@@ -44,23 +39,23 @@ type Ranker struct {
 	initialized bool
 	shardNumber int
 
-	dbRankerIndex store.Store
-	storeUpdateRankerIndexChan	  chan StoreRankerIndexReq
+	//dbRankerIndex store.Store
+	//storeUpdateRankerIndexChan	  chan StoreRankerIndexReq
 }
 
 //静态持久化恢复时读出的结构体类型
-type StoreRankerIndex struct {
-	docExist bool
-	field interface{}
-}
-
-
-//在线持久化请求结构体
-type StoreRankerIndexReq struct {
-	DocID string
-	DocExist bool
-	Field interface{}
-}
+//type StoreRankerIndex struct {
+//	docExist bool
+//	field interface{}
+//}
+//
+//
+////在线持久化请求结构体
+//type StoreRankerIndexReq struct {
+//	DocID string
+//	DocExist bool
+//	Field interface{}
+//}
 
 
 
@@ -79,7 +74,7 @@ func (ranker *Ranker) Init(shard int,StoreRankerBufLen int,onlyID bool) {
 	ranker.lock.fields = make(map[string]interface{})
 	ranker.lock.docs = make(map[string]bool)
 	ranker.shardNumber=shard
-	ranker.storeUpdateRankerIndexChan=make(chan StoreRankerIndexReq,StoreRankerBufLen)
+	//ranker.storeUpdateRankerIndexChan=make(chan StoreRankerIndexReq,StoreRankerBufLen)
 	//if !ranker.idOnly {
 	//	// new
 	//	ranker.lock.content = make(map[string]string)
@@ -87,113 +82,124 @@ func (ranker *Ranker) Init(shard int,StoreRankerBufLen int,onlyID bool) {
 	//}
 }
 
-func (ranker *Ranker) GetRankerIndexDB() store.Store {
-	return ranker.dbRankerIndex
-}
+//func (ranker *Ranker) GetRankerIndexDB() store.Store {
+//	return ranker.dbRankerIndex
+//}
+//
+//func (ranker *Ranker)OpenRankerIndexDB(dbPath string,StoreEngine string)  {
+//	var erropen error
+//	ranker.dbRankerIndex,erropen=store.OpenStore(dbPath,StoreEngine)
+//	if ranker.dbRankerIndex==nil||erropen!=nil {
+//		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
+//	}
+//}
 
-func (ranker *Ranker)OpenRankerIndexDB(dbPath string,StoreEngine string)  {
-	var erropen error
-	ranker.dbRankerIndex,erropen=store.OpenStore(dbPath,StoreEngine)
-	if ranker.dbRankerIndex==nil||erropen!=nil {
-		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
-	}
-}
+//func (ranker *Ranker)StoreRecoverRanker(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
+//	//ranker中的字段
+//	fields:=make(map[string]interface{})
+//	docsExist:=make(map[string]bool)
+//	var erropen error
+//	ranker.dbRankerIndex,erropen=store.OpenStore(dbPath,StoreEngine)
+//	if ranker.dbRankerIndex==nil||erropen!=nil {
+//		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
+//	}
+//	//defer ranker.dbRankerIndex.Close()
+//	ranker.dbRankerIndex.ForEach(func(k, v []byte) error {
+//		key, value := k, v
+//		// 得到docID
+//		keystring := string(key)
+//		buf := bytes.NewReader(value)
+//		dec := gob.NewDecoder(buf)
+//		//var data types.DocData
+//		var rankeindex StoreRankerIndex
+//		err := dec.Decode(&rankeindex)
+//		if err == nil {
+//			// 添加索引
+//			docsExist[keystring]=rankeindex.docExist
+//			fields[keystring]=rankeindex.field
+//		}
+//		return nil
+//	})
+//	ranker.lock.Lock()
+//	ranker.lock.docs=docsExist
+//	ranker.lock.fields=fields
+//	ranker.lock.Unlock()
+//	wg.Done()
+//}
 
-func (ranker *Ranker)StoreRecoverRanker(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
-	//ranker中的字段
-	fields:=make(map[string]interface{})
-	docsExist:=make(map[string]bool)
-	var erropen error
-	ranker.dbRankerIndex,erropen=store.OpenStore(dbPath,StoreEngine)
-	if ranker.dbRankerIndex==nil||erropen!=nil {
-		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
-	}
-	//defer ranker.dbRankerIndex.Close()
-	ranker.dbRankerIndex.ForEach(func(k, v []byte) error {
-		key, value := k, v
-		// 得到docID
-		keystring := string(key)
-		buf := bytes.NewReader(value)
-		dec := gob.NewDecoder(buf)
-		//var data types.DocData
-		var rankeindex StoreRankerIndex
-		err := dec.Decode(&rankeindex)
-		if err == nil {
-			// 添加索引
-			docsExist[keystring]=rankeindex.docExist
-			fields[keystring]=rankeindex.field
-		}
-		return nil
-	})
-	ranker.lock.Lock()
-	ranker.lock.docs=docsExist
-	ranker.lock.fields=fields
-	ranker.lock.Unlock()
-	wg.Done()
-}
-
-func (ranker *Ranker) StoreUpdateRankerIndexWorker() {
-	if ranker.dbRankerIndex==nil {
-		log.Fatalf("ranker %v dbRankerIndex is not open",ranker.shardNumber)
-	}
-	for {
-		request:=<-ranker.storeUpdateRankerIndexChan
-		buf:=bytes.Buffer{}
-		enc:=gob.NewEncoder(&buf)
-		enc.Encode(StoreRankerIndex{
-			docExist:request.DocExist,
-			field:request.Field,
-		})
-		ranker.dbRankerIndex.Set([]byte(request.DocID),buf.Bytes())
-	}
-}
+//func (ranker *Ranker) StoreUpdateRankerIndexWorker() {
+//	if ranker.dbRankerIndex==nil {
+//		log.Fatalf("ranker %v dbRankerIndex is not open",ranker.shardNumber)
+//	}
+//	for {
+//		request:=<-ranker.storeUpdateRankerIndexChan
+//		if !request.DocExist&&request.Field==nil {
+//			ranker.dbRankerIndex.Delete([]byte(request.DocID))
+//			continue
+//		}
+//		buf:=bytes.Buffer{}
+//		enc:=gob.NewEncoder(&buf)
+//		enc.Encode(StoreRankerIndex{
+//			docExist:request.DocExist,
+//			field:request.Field,
+//		})
+//		ranker.dbRankerIndex.Set([]byte(request.DocID),buf.Bytes())
+//	}
+//}
 
 
 // AddDoc add doc
 // 给某个文档添加评分字段
-func (ranker *Ranker) AddDoc(
-	// docId uint64, fields interface{}, content string, attri interface{}) {
-	docId string, fields interface{}, content ...interface{}) {
-	if ranker.initialized == false {
-		log.Fatal("The Ranker has not been initialized.")
-	}
-
-	ranker.lock.Lock()
-	ranker.lock.fields[docId] = fields
-	ranker.lock.docs[docId] = true
-	ranker.lock.Unlock()
-
-	timer:=time.NewTimer(time.Millisecond*10)
-	select {
-	case ranker.storeUpdateRankerIndexChan<-StoreRankerIndexReq{
-		DocID:docId,
-		DocExist:true,
-		Field:fields,
-	}:
-		log.Println("a ranker line is send to rankerstore")
-	case <-timer.C:
-		log.Println("timeout")
-	}
-}
+//func (ranker *Ranker) AddDoc(
+//	// docId uint64, fields interface{}, content string, attri interface{}) {
+//	docId string, fields interface{}, content ...interface{}) {
+//	if ranker.initialized == false {
+//		log.Fatal("The Ranker has not been initialized.")
+//	}
+//
+//	ranker.lock.Lock()
+//	ranker.lock.fields[docId] = fields
+//	ranker.lock.docs[docId] = true
+//	timer:=time.NewTimer(time.Millisecond*10)
+//	select {
+//	case ranker.storeUpdateRankerIndexChan<-StoreRankerIndexReq{
+//		DocID:docId,
+//		DocExist:true,
+//		Field:fields,
+//	}:
+//		log.Println("a ranker line is send to rankerstore")
+//	case <-timer.C:
+//		log.Println("timeout")
+//	}
+//	ranker.lock.Unlock()
+//
+//
+//}
 
 // RemoveDoc 删除某个文档的评分字段
-func (ranker *Ranker) RemoveDoc(docId string) {
-	if ranker.initialized == false {
-		log.Fatal("The Ranker has not been initialized.")
-	}
-
-	ranker.lock.Lock()
-	delete(ranker.lock.fields, docId)
-	delete(ranker.lock.docs, docId)
-
-	//if !ranker.idOnly {
-	//	// new
-	//	delete(ranker.lock.content, docId)
-	//	delete(ranker.lock.attri, docId)
-	//}
-
-	ranker.lock.Unlock()
-}
+//func (ranker *Ranker) RemoveDoc(docId string) {
+//	if ranker.initialized == false {
+//		log.Fatal("The Ranker has not been initialized.")
+//	}
+//
+//	ranker.lock.Lock()
+//	delete(ranker.lock.fields, docId)
+//	delete(ranker.lock.docs, docId)
+//
+//	timer:=time.NewTimer(time.Millisecond*10)
+//	select {
+//	case ranker.storeUpdateRankerIndexChan<-StoreRankerIndexReq{
+//		DocID:docId,
+//		DocExist:false,
+//		Field:nil,
+//	}:
+//		log.Println("a ranker line is send to rankerstore")
+//	case <-timer.C:
+//		log.Println("timeout")
+//	}
+//
+//	ranker.lock.Unlock()
+//}
 
 func maxOutput(options types.RankOpts, docsLen int) (int, int) {
 	var start, end int

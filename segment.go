@@ -282,6 +282,7 @@ func (engine *Engine) segmenterWorker() {
 				DocId:    request.docId,
 				TokenLen: float32(numTokens),
 				Keywords: make([]types.KeywordIndex, len(tokensMap)),
+				Field:request.data.Fields,
 			},
 			forceUpdate: request.forceUpdate,
 		}
@@ -304,11 +305,11 @@ func (engine *Engine) segmenterWorker() {
 				engine.indexerAddDocChans[i] <- indexerAddDocReq{forceUpdate: true}
 			}
 		}
-		rankerRequest := rankerAddDocReq{
-			// docId: request.docId, fields: request.data.Fields}
-			docId: request.docId, fields: request.data.Fields,
-			content: request.data.Content, attri: request.data.Attri}
-		engine.rankerAddDocChans[shard] <- rankerRequest
+		//rankerRequest := rankerAddDocReq{
+		//	// docId: request.docId, fields: request.data.Fields}
+		//	docId: request.docId, fields: request.data.Fields,
+		//	content: request.data.Content, attri: request.data.Attri}
+		//engine.rankerAddDocChans[shard] <- rankerRequest
 	}
 }
 
