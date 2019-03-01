@@ -93,17 +93,17 @@ func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string
 	})
 	//恢复indexer
 	indexer.tableLock.Lock()
-	defer indexer.tableLock.Unlock()
 	indexer.tableLock.totalTokenLen=totalTokenLen
 	indexer.tableLock.numDocs=numDocs
 	indexer.tableLock.docTokenLens=docTokenLens
 	indexer.tableLock.docsState=docsState
+	indexer.tableLock.Unlock()
 	atomic.AddUint64(&indexer.numDocsStore,numDocs)
-
+	//恢复ranker
 	indexer.ranker.lock.Lock()
-	defer indexer.ranker.lock.Unlock()
 	indexer.ranker.lock.fields=fields
 	indexer.ranker.lock.docs=docsExist
+	indexer.ranker.lock.Unlock()
 	wg.Done()
 }
 
@@ -133,8 +133,8 @@ func (indexer *Indexer)StoreRecoverReverseIndex(dbPath string,StoreEngine string
 		return nil
 	})
 	indexer.tableLock.Lock()
-	defer indexer.tableLock.Unlock()
 	indexer.tableLock.table=table
+	indexer.tableLock.Unlock()
 	wg.Done()
 }
 

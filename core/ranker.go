@@ -65,7 +65,7 @@ func maxOutput(options types.RankOpts, docsLen int) (int, int) {
 	end = docsLen
 	return start, end
 }
-
+//d
 func (ranker *Ranker) rankOutIDs(docs []types.IndexedDoc, options types.RankOpts,
 	countDocsOnly bool) (outputDocs types.ScoredIDs, numDocs int) {
 	for _, d := range docs {

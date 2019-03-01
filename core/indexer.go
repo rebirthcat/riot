@@ -37,6 +37,7 @@ import (
 type Indexer struct {
 	// 从搜索键到文档列表的反向索引
 	// 加了读写锁以保证读写安全
+	//a
 	tableLock struct {
 		sync.RWMutex
 		table     map[string]*KeywordIndices
@@ -51,18 +52,19 @@ type Indexer struct {
 		// 每个文档的关键词长度
 		docTokenLens map[string]float32
 	}
-
+	//b
 	addCacheLock struct {
 		sync.RWMutex
 		addCachePointer int
 		addCache        types.DocsIndex
 	}
-
+	//c
 	removeCacheLock struct {
 		sync.RWMutex
 		removeCachePointer int
 		removeCache        types.DocsId
 	}
+	//d
 	ranker *Ranker
 	initOptions types.IndexerOpts
 	initialized bool
@@ -89,7 +91,7 @@ type KeywordIndices struct {
 	frequencies []float32 // IndexType == FrequenciesIndex
 	locations   [][]int   // IndexType == LocsIndex
 }
-
+//a
 func (indexer *Indexer)GetTableLen()uint64  {
 	indexer.tableLock.RLock()
 	defer indexer.tableLock.RUnlock()
@@ -100,13 +102,13 @@ func (indexer *Indexer)GetNumDocsStore() uint64 {
 	return atomic.LoadUint64(&indexer.numDocsStore)
 }
 
-
+//a
 func (indexer *Indexer)GetNumDocs()uint64  {
 	indexer.tableLock.RLock()
 	defer indexer.tableLock.RUnlock()
 	return indexer.tableLock.numDocs
 }
-
+//a
 func (indexer *Indexer)GetNumTotalTokenLen()uint64  {
 	indexer.tableLock.RLock()
 	defer indexer.tableLock.RUnlock()
@@ -143,6 +145,7 @@ func (indexer *Indexer) getDocId(ti *KeywordIndices, i int) string {
 }
 
 // HasDoc doc is exist return true
+//a
 func (indexer *Indexer) HasDoc(docId string) bool {
 	indexer.tableLock.RLock()
 	defer indexer.tableLock.RUnlock()
@@ -160,6 +163,7 @@ func (indexer *Indexer) getIndexLen(ti *KeywordIndices) int {
 }
 
 // AddDocToCache 向 ADDCACHE 中加入一个文档
+//b a
 func (indexer *Indexer) AddDocToCache(doc *types.DocIndex, forceUpdate bool) {
 	if indexer.initialized == false {
 		log.Fatal("The Indexer has not been initialized.")
@@ -223,6 +227,7 @@ func (indexer *Indexer) AddDocToCache(doc *types.DocIndex, forceUpdate bool) {
 }
 
 // AddDocs 向反向索引表中加入 ADDCACHE 中所有文档
+//a d
 func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 	if indexer.initialized == false {
 		log.Fatal("The Indexer has not been initialized.")
@@ -335,6 +340,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 
 // RemoveDocToCache 向 REMOVECACHE 中加入一个待删除文档
 // 返回值表示文档是否在索引表中被删除
+//c a
 func (indexer *Indexer) RemoveDocToCache(docId string, forceUpdate bool) bool {
 	if indexer.initialized == false {
 		log.Fatal("The Indexer has not been initialized.")
@@ -374,6 +380,7 @@ func (indexer *Indexer) RemoveDocToCache(docId string, forceUpdate bool) bool {
 }
 
 // RemoveDocs 向反向索引表中删除 REMOVECACHE 中所有文档
+//a d
 func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 	if indexer.initialized == false {
 		log.Fatal("The Indexer has not been initialized.")
@@ -388,6 +395,10 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 		indexer.tableLock.totalTokenLen -= indexer.tableLock.docTokenLens[docId]
 		delete(indexer.tableLock.docTokenLens, docId)
 		delete(indexer.tableLock.docsState, docId)
+		indexer.ranker.lock.Lock()
+		delete(indexer.ranker.lock.docs,docId)
+		delete(indexer.ranker.lock.fields,docId)
+		indexer.ranker.lock.Unlock()
 		//持久化
 		timer=time.NewTimer(time.Millisecond*10)
 		select {
@@ -472,15 +483,11 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 	}
 }
 
-//func (indexer *Indexer) StoreForwardIndexWorker() {
-//	requeset:<-indexer.storeAddForwardIndexChan
-//
-//}
-
 
 // Lookup lookup docs
 // 查找包含全部搜索键(AND操作)的文档
 // 当 docIds 不为 nil 时仅从 docIds 指定的文档中查找
+//a
 func (indexer *Indexer) Lookup(
 	tokens, labels []string, docIds map[string]bool, countDocsOnly bool,
 	logic ...types.Logic) (docs []types.IndexedDoc, numDocs int) {
@@ -526,7 +533,7 @@ func (indexer *Indexer) Lookup(
 
 	return indexer.internalLookup(keywords, tokens, docIds, countDocsOnly)
 }
-
+//a
 func (indexer *Indexer) internalLookup(
 	keywords, tokens []string, docIds map[string]bool, countDocsOnly bool) (
 	docs []types.IndexedDoc, numDocs int) {
@@ -671,6 +678,7 @@ func (indexer *Indexer) internalLookup(
 }
 
 // LogicLookup logic Lookup
+//a
 func (indexer *Indexer) LogicLookup(
 	docIds map[string]bool, countDocsOnly bool, logicExpr []string,
 	logic types.Logic) (docs []types.IndexedDoc, numDocs int) {

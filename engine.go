@@ -83,12 +83,10 @@ type Engine struct {
 	segmenterChan         chan segmenterReq
 	indexerAddDocChans    []chan indexerAddDocReq
 	indexerRemoveDocChans []chan indexerRemoveDocReq
-	//rankerAddDocChans     []chan rankerAddDocReq
 
 	// 建立排序器使用的通信通道
 	indexerLookupChans   []chan indexerLookupReq
 	rankerRankChans      []chan rankerRankReq
-	//rankerRemoveDocChans []chan rankerRemoveDocReq
 }
 
 
