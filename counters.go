@@ -16,31 +16,28 @@
 package riot
 
 // NumTokenAdded added token index number
-func (engine *Engine) NumTokenAdded() uint64 {
-	return engine.numTokenIndexAdded
+func (engine *Engine) NumTokensAdded() uint64 {
+	var num uint64
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		num+=engine.indexers[shard].GetNumTotalTokenLen()
+	}
+	return num
 }
 
 // NumIndexed documents indexed number
-func (engine *Engine) NumIndexed() uint64 {
-	return engine.numDocsIndexed
-}
-
-// NumRemoved documents removed number
-//func (engine *Engine) NumRemoved() uint64 {
-//	return engine.numDocsRemoved
-//}
-
-// NumTokenIndexAdded added token index number, deprecated
-func (engine *Engine) NumTokenIndexAdded() uint64 {
-	return engine.numTokenIndexAdded
-}
-
-// NumDocsIndexed documents indexed number, deprecated
 func (engine *Engine) NumDocsIndexed() uint64 {
-	return engine.numDocsIndexed
+	var num uint64
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		num+=engine.indexers[shard].GetNumDocs()
+	}
+	return num
 }
 
-// NumDocsRemoved documents removed number, deprecated
-//func (engine *Engine) NumDocsRemoved() uint64 {
-//	return engine.numDocsRemoved
-//}
+func (engine *Engine)NumDocsIndexedStore() uint64 {
+	var num uint64
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		num+=engine.indexers[shard].GetNumDocsStore()
+	}
+	return num
+}
+

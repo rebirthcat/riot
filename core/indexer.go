@@ -43,7 +43,7 @@ type Indexer struct {
 		sync.RWMutex
 		table     map[string]*KeywordIndices
 		docsState map[string]int // nil: 表示无状态记录，0: 存在于索引中，1: 等待删除，2: 等待加入
-		// 这实际上是总文档数的一个近似
+		// 单个分片的文档总数（精确值）
 		numDocs uint64
 		// docIDs *hset.Hset
 
