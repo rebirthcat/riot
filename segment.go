@@ -244,6 +244,8 @@ func (engine *Engine) makeTokensMap(request segmenterReq) (map[string][]int, int
 	return tokensMap, numTokens
 }
 
+
+
 func (engine *Engine) segmenterWorker() {
 	for {
 		request := <-engine.segmenterChan

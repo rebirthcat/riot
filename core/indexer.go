@@ -23,6 +23,7 @@ import (
 	"log"
 	"math"
 	"riot/store"
+	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -82,6 +83,11 @@ type Indexer struct {
 	storeUpdateReverseIndexChan    chan StoreReverseIndexReq
 	//表示保存在持久化文件中的文档树量(因为该值只做统计使用，不参与搜索的bm25的计算，所以不适合放到tableLock里)
 	numDocsStore	uint64
+
+	storeUpdateForwardIndexFinsh bool
+
+	storeUpdateReverseIndexFinsh bool
+
 }
 
 // KeywordIndices 反向索引表的一行，收集了一个搜索键出现的所有文档，按照DocId从小到大排序。
@@ -91,6 +97,19 @@ type KeywordIndices struct {
 	frequencies []float32 // IndexType == FrequenciesIndex
 	locations   [][]int   // IndexType == LocsIndex
 }
+
+func (indexer *Indexer) Flush(wg *sync.WaitGroup) {
+	indexer.AddDocToCache(nil,true)
+	for  {
+		runtime.Gosched()
+		if indexer.storeUpdateForwardIndexFinsh &&indexer.storeUpdateReverseIndexFinsh{
+			break
+		}
+	}
+	wg.Done()
+
+}
+
 //a
 func (indexer *Indexer)GetTableLen()uint64  {
 	indexer.tableLock.RLock()
