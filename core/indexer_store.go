@@ -82,7 +82,7 @@ func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string
 		//正向索引结构
 		var fowardindex StoreForwardIndex
 		err := dec.Decode(&fowardindex)
-		log.Println(fowardindex)
+		log.Println("forwardindex:",fowardindex)
 		if err == nil {
 			docsState[keystring] = 0
 			docTokenLens[keystring] = fowardindex.tokenLen
