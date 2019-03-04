@@ -20,17 +20,16 @@ Package core is riot core
 package core
 
 import (
+	"bytes"
+	"encoding/gob"
+	"github.com/rebirthcat/riot/store"
+	"github.com/rebirthcat/riot/types"
+	"github.com/rebirthcat/riot/utils"
 	"log"
 	"math"
-	"github.com/rebirthcat/riot/store"
-	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
-	"time"
-
-	"github.com/rebirthcat/riot/types"
-	"github.com/rebirthcat/riot/utils"
 )
 
 
@@ -84,9 +83,9 @@ type Indexer struct {
 	//表示保存在持久化文件中的文档树量(因为该值只做统计使用，不参与搜索的bm25的计算，所以不适合放到tableLock里)
 	numDocsStore	uint64
 
-	storeUpdateForwardIndexFinsh bool
-
-	storeUpdateReverseIndexFinsh bool
+	//storeUpdateForwardIndexFinsh bool
+	//
+	//storeUpdateReverseIndexFinsh bool
 
 }
 
@@ -100,12 +99,12 @@ type KeywordIndices struct {
 
 func (indexer *Indexer) Flush(wg *sync.WaitGroup) {
 	indexer.AddDocToCache(nil,true)
-	for  {
-		runtime.Gosched()
-		if indexer.storeUpdateForwardIndexFinsh &&indexer.storeUpdateReverseIndexFinsh{
-			break
-		}
-	}
+	//for  {
+	//	runtime.Gosched()
+	//	if indexer.storeUpdateForwardIndexFinsh &&indexer.storeUpdateReverseIndexFinsh{
+	//		break
+	//	}
+	//}
 	wg.Done()
 
 }
@@ -251,7 +250,12 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 	if indexer.initialized == false {
 		log.Fatal("The Indexer has not been initialized.")
 	}
-
+	if indexer.dbforwardIndex==nil {
+		log.Fatalf("indexer %shard_v  dbforwardIndex is not open,updatefailed",indexer.shardNumber)
+	}
+	if indexer.dbRevertIndex==nil {
+		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
+	}
 	indexer.tableLock.Lock()
 	defer indexer.tableLock.Unlock()
 	indexPointers := make(map[string]int, len(indexer.tableLock.table))
@@ -271,7 +275,6 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 		}
 
 		// 更新文档关键词总长度
-		var timer *time.Timer
 		if doc.TokenLen != 0 {
 			indexer.tableLock.docTokenLens[doc.DocId] = float32(doc.TokenLen)
 			indexer.tableLock.totalTokenLen += doc.TokenLen
@@ -279,17 +282,18 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indexer.ranker.lock.docs[doc.DocId]=true
 			indexer.ranker.lock.fields[doc.DocId]=doc.Field
 			indexer.ranker.lock.Unlock()
-			//发送至持久化
-			timer=time.NewTimer(time.Millisecond*100)
-			select {
-			case indexer.storeUpdateForwardIndexChan <- StoreForwardIndexReq{
-				DocID:       doc.DocId,
-				DocTokenLen: doc.TokenLen,
-				Field:doc.Field,
-			}:
-				//log.Println("a forwardindex is send to store")
-			case <-timer.C:
-				log.Println("timeout")
+			//持久化
+			buf:=bytes.Buffer{}
+			enc:=gob.NewEncoder(&buf)
+			enc.Encode(StoreForwardIndex{
+				tokenLen:doc.TokenLen,
+				field:doc.Field,
+			})
+			errforwardstore:=indexer.dbforwardIndex.Set([]byte(doc.DocId),buf.Bytes())
+			if errforwardstore!=nil {
+				log.Printf("error: %v forwardindex update failed",doc.DocId)
+			}else {
+				atomic.AddUint64(&indexer.numDocsStore,1)
 			}
 		}
 
@@ -333,20 +337,13 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indices.docIds = append(indices.docIds, "0")
 			copy(indices.docIds[position+1:], indices.docIds[position:])
 			indices.docIds[position] = doc.DocId
-			//发送至持久化
-			if timer==nil {
-				timer=time.NewTimer(time.Millisecond*100)
-			}else {
-				timer.Reset(time.Millisecond*100)
-			}
-			select {
-			case indexer.storeUpdateReverseIndexChan <- StoreReverseIndexReq{
-				Token:          keyword.Text,
-				KeywordIndices: *indices,
-			}:
-				//log.Println("a reverseindex is send to store")
-			case <-timer.C:
-				log.Println("timeout")
+			//持久化
+			buf:=bytes.Buffer{}
+			enc:=gob.NewEncoder(&buf)
+			enc.Encode(indices)
+			errreversestore:=indexer.dbRevertIndex.Set([]byte(keyword.Text),buf.Bytes())
+			if errreversestore!=nil {
+				log.Printf("error %v reverseindex update failed",keyword.Text)
 			}
 		}
 		// 更新文章状态和总数
@@ -409,7 +406,7 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 	defer indexer.tableLock.Unlock()
 
 	// 更新文档关键词总长度，删除文档状态
-	var timer *time.Timer
+	//var timer *time.Timer
 	for _, docId := range *docs {
 		indexer.tableLock.totalTokenLen -= indexer.tableLock.docTokenLens[docId]
 		delete(indexer.tableLock.docTokenLens, docId)
@@ -419,16 +416,11 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 		delete(indexer.ranker.lock.fields,docId)
 		indexer.ranker.lock.Unlock()
 		//持久化
-		timer=time.NewTimer(time.Millisecond*10)
-		select {
-		case indexer.storeUpdateForwardIndexChan<-StoreForwardIndexReq{
-			DocID:docId,
-			DocTokenLen:-1,
-			Field:nil,
-		}:
-			log.Println("a forwardindex is send to remove")
-		case <-timer.C:
-			log.Println("timeout")
+		errforwardstore:=indexer.dbforwardIndex.Delete([]byte(docId))
+		if errforwardstore!=nil {
+			log.Printf("error: %v forwardindex delete failed",docId)
+		}else {
+			atomic.AddUint64(&indexer.numDocsStore,^uint64(1-1))
 		}
 	}
 
@@ -485,19 +477,12 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 
 		}
 		//持久化
-		if timer == nil {
-			timer=time.NewTimer(time.Millisecond*10)
-		}else {
-			timer.Reset(time.Millisecond*10)
-		}
-		select {
-		case indexer.storeUpdateReverseIndexChan <- StoreReverseIndexReq{
-			Token:          keyword,
-			KeywordIndices: *indices,
-		}:
-			log.Println("a reverseindex is send to set")
-		case <-timer.C:
-			log.Println("timeout")
+		buf:=bytes.Buffer{}
+		enc:=gob.NewEncoder(&buf)
+		enc.Encode(indices)
+		errreversestore:=indexer.dbRevertIndex.Set([]byte(keyword),buf.Bytes())
+		if errreversestore!=nil {
+			log.Printf("error %v reverseindex update failed",keyword)
 		}
 	}
 }

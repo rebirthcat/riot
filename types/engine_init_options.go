@@ -42,7 +42,7 @@ var (
 		B:  0.75,
 	}
 	defaultStoreShards = 8
-	defaultStoreChanBufLen=800
+	//defaultStoreChanBufLen=800
 )
 
 // EngineOpts init engine options
@@ -119,7 +119,6 @@ func (options *EngineOpts) Init() {
 	// 	log.Fatal("字典文件不能为空")
 	//  options.GseDict = "zh"
 	// }
-
 	if options.NumGseThreads == 0 {
 		options.NumGseThreads = defaultNumGseThreads
 	}
@@ -164,11 +163,11 @@ func (options *EngineOpts) Init() {
 		options.StoreShards = defaultStoreShards
 	}
 
-	if options.StoreIndexBufLen==0 {
-		options.StoreIndexBufLen=defaultStoreChanBufLen
-	}
+	//if options.StoreIndexBufLen==0 {
+	//	options.StoreIndexBufLen=defaultStoreChanBufLen
+	//}
 
-	if options.StoreRankerBufLen==0 {
-		options.StoreRankerBufLen=defaultStoreChanBufLen
-	}
+	//if options.StoreRankerBufLen==0 {
+	//	options.StoreRankerBufLen=defaultStoreChanBufLen
+	//}
 }
