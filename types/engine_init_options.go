@@ -41,7 +41,7 @@ var (
 		B:  0.75,
 	}
 	defaultStoreShards = 8
-	defaultStoreChanBufLen=16
+	defaultStoreChanBufLen=800
 )
 
 // EngineOpts init engine options

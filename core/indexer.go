@@ -280,7 +280,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indexer.ranker.lock.fields[doc.DocId]=doc.Field
 			indexer.ranker.lock.Unlock()
 			//发送至持久化
-			timer=time.NewTimer(time.Millisecond*10)
+			timer=time.NewTimer(time.Millisecond*100)
 			select {
 			case indexer.storeUpdateForwardIndexChan <- StoreForwardIndexReq{
 				DocID:       doc.DocId,
@@ -335,9 +335,9 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indices.docIds[position] = doc.DocId
 			//发送至持久化
 			if timer==nil {
-				timer=time.NewTimer(time.Millisecond*10)
+				timer=time.NewTimer(time.Millisecond*100)
 			}else {
-				timer.Reset(time.Millisecond*10)
+				timer.Reset(time.Millisecond*100)
 			}
 			select {
 			case indexer.storeUpdateReverseIndexChan <- StoreReverseIndexReq{
