@@ -152,7 +152,7 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.Indexe
 	indexer.removeCacheLock.removeCache = make(
 		[]string, indexer.initOptions.DocCacheSize*2)
 	indexer.tableLock.docTokenLens = make(map[string]float32)
-
+	indexer.ranker=ranker
 	indexer.storeUpdateForwardIndexChan=make(chan StoreForwardIndexReq,StoreChanBufLen)
 	indexer.storeUpdateReverseIndexChan=make(chan StoreReverseIndexReq,StoreChanBufLen)
 	indexer.shardNumber=shard
