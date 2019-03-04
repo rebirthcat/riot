@@ -105,6 +105,7 @@ func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string
 	indexer.ranker.lock.fields=fields
 	indexer.ranker.lock.docs=docsExist
 	indexer.ranker.lock.Unlock()
+	log.Printf("indexer%v forwardindex recover finish",indexer.shardNumber)
 	wg.Done()
 }
 
@@ -136,6 +137,7 @@ func (indexer *Indexer)StoreRecoverReverseIndex(dbPath string,StoreEngine string
 	indexer.tableLock.Lock()
 	indexer.tableLock.table=table
 	indexer.tableLock.Unlock()
+	log.Printf("indexer%v reverseindex recover finish",indexer.shardNumber)
 	wg.Done()
 }
 
