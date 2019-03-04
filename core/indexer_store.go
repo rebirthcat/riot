@@ -81,7 +81,7 @@ func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string
 		//正向索引结构
 		var fowardindex StoreForwardIndex
 		err := dec.Decode(&fowardindex)
-		log.Println(fowardindex)
+		//log.Println(fowardindex)
 		if err == nil {
 			docsState[keystring] = 0
 			docTokenLens[keystring] = fowardindex.TokenLen
@@ -128,7 +128,7 @@ func (indexer *Indexer)StoreRecoverReverseIndex(dbPath string,StoreEngine string
 		//var data types.DocData
 		var keywordIndices KeywordIndices
 		err := dec.Decode(&keywordIndices)
-		log.Println(keywordIndices)
+		//log.Println(keywordIndices)
 		if err == nil {
 			// 添加索引
 			table[keystring]=&keywordIndices
