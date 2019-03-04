@@ -18,11 +18,25 @@ type StoreForwardIndex struct {
 }
 
 
+type StoreReverseIndex struct {
+	DocIds []string
+	Frequencies []float32
+	Locations   [][]int
+}
+
 //在线持久化请求结构
 type StoreReverseIndexReq struct {
 	Token string
-	KeywordIndices KeywordIndices
+	KeywordIndices StoreReverseIndex
 }
+
+//type KeywordIndices struct {
+//	// 下面的切片是否为空，取决于初始化时IndexType的值
+//	docIds      []string  // 全部类型都有
+//	frequencies []float32 // IndexType == FrequenciesIndex
+//	locations   [][]int   // IndexType == LocsIndex
+//}
+
 
 type StoreForwardIndexReq struct {
 	DocID string
@@ -126,12 +140,16 @@ func (indexer *Indexer)StoreRecoverReverseIndex(dbPath string,StoreEngine string
 		buf := bytes.NewReader(value)
 		dec := gob.NewDecoder(buf)
 		//var data types.DocData
-		var keywordIndices KeywordIndices
-		err := dec.Decode(&keywordIndices)
+		var storereverse StoreReverseIndex
+		err := dec.Decode(&storereverse)
 		//log.Println(keywordIndices)
 		if err == nil {
 			// 添加索引
-			table[keystring]=&keywordIndices
+			table[keystring]=&KeywordIndices{
+				docIds:storereverse.DocIds,
+				frequencies:storereverse.Frequencies,
+				locations:storereverse.Locations,
+			}
 		}
 		return nil
 	})

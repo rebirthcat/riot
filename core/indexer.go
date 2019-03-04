@@ -335,7 +335,11 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			select {
 			case indexer.storeUpdateReverseIndexChan <- StoreReverseIndexReq{
 				Token:          keyword.Text,
-				KeywordIndices: *indices,
+				KeywordIndices: StoreReverseIndex{
+					DocIds:indices.docIds,
+					Frequencies:indices.frequencies,
+					Locations:indices.locations,
+				},
 			}:
 				//log.Println("a reverseindex is send to store")
 			case <-timer.C:
@@ -487,7 +491,11 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 		select {
 		case indexer.storeUpdateReverseIndexChan <- StoreReverseIndexReq{
 			Token:          keyword,
-			KeywordIndices: *indices,
+			KeywordIndices: StoreReverseIndex{
+				DocIds:indices.docIds,
+				Frequencies:indices.frequencies,
+				Locations:indices.locations,
+			},
 		}:
 			log.Println("a reverseindex is send to set")
 		case <-timer.C:
