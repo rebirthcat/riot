@@ -51,15 +51,6 @@ func (engine *Engine) indexerAddDoc(shard int) {
 	for {
 		request := <-engine.indexerAddDocChans[shard]
 		engine.indexers[shard].AddDocToCache(request.doc, request.forceUpdate)
-		//if request.doc != nil {
-		//	atomic.AddUint64(&engine.numTokenIndexAdded,
-		//		uint64(len(request.doc.Keywords)))
-		//
-		//	//atomic.AddUint64(&engine.numDocsIndexed, 1)
-		//}
-		//if request.forceUpdate {
-		//	atomic.AddUint64(&engine.numDocsForceUpdated, 1)
-		//}
 	}
 }
 
@@ -67,12 +58,6 @@ func (engine *Engine) indexerRemoveDoc(shard int) {
 	for {
 		request := <-engine.indexerRemoveDocChans[shard]
 		engine.indexers[shard].RemoveDocToCache(request.docId, request.forceUpdate)
-		//if request.docId != "0" {
-		//	atomic.AddUint64(&engine.numDocsRemoved, 1)
-		//}
-		//if request.forceUpdate {
-		//	atomic.AddUint64(&engine.numDocsForceUpdated, 1)
-		//}
 	}
 }
 

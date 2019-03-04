@@ -245,8 +245,8 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	for shard := 0; shard < options.NumShards; shard++ {
 		go engine.indexerAddDoc(shard)
 		go engine.indexerRemoveDoc(shard)
-		//go engine.indexers[shard].StoreUpdateForWardIndexWorker()
-		//go engine.indexers[shard].StoreUpdateReverseIndexWorker()
+		go engine.indexers[shard].StoreUpdateForWardIndexWorker()
+		go engine.indexers[shard].StoreUpdateReverseIndexWorker()
 
 		for i := 0; i < options.NumIndexerThreads; i++ {
 			go engine.indexerLookup(shard)

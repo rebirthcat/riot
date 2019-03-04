@@ -3,10 +3,11 @@ package core
 import (
 	"bytes"
 	"encoding/gob"
-	"github.com/rebirthcat/riot/store"
 	"log"
+	"github.com/rebirthcat/riot/store"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 //系统重启时从持久化文件中读出来的一行数据所反序列化得到的类型
@@ -81,6 +82,7 @@ func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string
 		//正向索引结构
 		var fowardindex StoreForwardIndex
 		err := dec.Decode(&fowardindex)
+		log.Println(fowardindex)
 		if err == nil {
 			docsState[keystring] = 0
 			docTokenLens[keystring] = fowardindex.tokenLen
@@ -142,58 +144,58 @@ func (indexer *Indexer)StoreRecoverReverseIndex(dbPath string,StoreEngine string
 
 
 
-//func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
-//	if indexer.dbforwardIndex==nil {
-//		log.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
-//	}
-//	timer:=time.NewTimer(time.Millisecond*1000)
-//	for {
-//		timer.Reset(time.Millisecond*1000)
-//		select {
-//		case request := <-indexer.storeUpdateForwardIndexChan:
-//			indexer.storeUpdateForwardIndexFinsh=false
-//			if indexer.dbforwardIndex==nil {
-//				log.Fatalf("indexer %shard_v  dbforwardIndex is not open,updatefailed",indexer.shardNumber)
-//			}
-//			//如果传过来的持久化请求中的DocTokenLen小于0,则是删除请求，即从RemoveDocs（）函数中传过来的
-//			if request.DocTokenLen<0 {
-//				indexer.dbforwardIndex.Delete([]byte(request.DocID))
-//				atomic.AddUint64(&indexer.numDocsStore,^uint64(1-1))
-//				continue
-//			}else {
-//				buf:=bytes.Buffer{}
-//				enc:=gob.NewEncoder(&buf)
-//				enc.Encode(StoreForwardIndex{
-//					tokenLen:request.DocTokenLen,
-//					field:request.Field,
-//				})
-//				indexer.dbforwardIndex.Set([]byte(request.DocID),buf.Bytes())
-//				atomic.AddUint64(&indexer.numDocsStore,1)
-//			}
-//		case <-timer.C:
-//			indexer.storeUpdateForwardIndexFinsh=true
-//		}
-//	}
-//}
+func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
+	if indexer.dbforwardIndex==nil {
+		log.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
+	}
+	timer:=time.NewTimer(time.Millisecond*1000)
+	for {
+		timer.Reset(time.Millisecond*1000)
+		select {
+		case request := <-indexer.storeUpdateForwardIndexChan:
+			indexer.storeUpdateForwardIndexFinsh=false
+			if indexer.dbforwardIndex==nil {
+				log.Fatalf("indexer %shard_v  dbforwardIndex is not open,updatefailed",indexer.shardNumber)
+			}
+			//如果传过来的持久化请求中的DocTokenLen小于0,则是删除请求，即从RemoveDocs（）函数中传过来的
+			if request.DocTokenLen<0 {
+				indexer.dbforwardIndex.Delete([]byte(request.DocID))
+				atomic.AddUint64(&indexer.numDocsStore,^uint64(1-1))
+				continue
+			}else {
+				buf:=bytes.Buffer{}
+				enc:=gob.NewEncoder(&buf)
+				enc.Encode(StoreForwardIndex{
+					tokenLen:request.DocTokenLen,
+					field:request.Field,
+				})
+				indexer.dbforwardIndex.Set([]byte(request.DocID),buf.Bytes())
+				atomic.AddUint64(&indexer.numDocsStore,1)
+			}
+		case <-timer.C:
+			indexer.storeUpdateForwardIndexFinsh=true
+		}
+	}
+}
 
-//func (indexer *Indexer) StoreUpdateReverseIndexWorker() {
-//	if indexer.dbRevertIndex==nil {
-//		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
-//	}
-//	timer:=time.NewTimer(time.Millisecond*1000)
-//	for {
-//		select {
-//		case request := <-indexer.storeUpdateReverseIndexChan:
-//			indexer.storeUpdateReverseIndexFinsh=false
-//			if indexer.dbRevertIndex==nil {
-//				log.Fatalf("indexer shard_%v  dbRevertIndex is not open,updatefailed",indexer.shardNumber)
-//			}
-//			buf:=bytes.Buffer{}
-//			enc:=gob.NewEncoder(&buf)
-//			enc.Encode(request.KeywordIndices)
-//			indexer.dbRevertIndex.Set([]byte(request.Token),buf.Bytes())
-//		case <-timer.C:
-//			indexer.storeUpdateReverseIndexFinsh=true
-//		}
-//	}
-//}
+func (indexer *Indexer) StoreUpdateReverseIndexWorker() {
+	if indexer.dbforwardIndex==nil {
+		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
+	}
+	timer:=time.NewTimer(time.Millisecond*1000)
+	for {
+		select {
+		case request := <-indexer.storeUpdateReverseIndexChan:
+			indexer.storeUpdateReverseIndexFinsh=false
+			if indexer.dbRevertIndex==nil {
+				log.Fatalf("indexer shard_%v  dbRevertIndex is not open,updatefailed",indexer.shardNumber)
+			}
+			buf:=bytes.Buffer{}
+			enc:=gob.NewEncoder(&buf)
+			enc.Encode(request.KeywordIndices)
+			indexer.dbRevertIndex.Set([]byte(request.Token),buf.Bytes())
+		case <-timer.C:
+			indexer.storeUpdateReverseIndexFinsh=true
+		}
+	}
+}
