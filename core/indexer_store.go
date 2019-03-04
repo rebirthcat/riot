@@ -210,7 +210,6 @@ func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
 
 	for {
 	 	request := <-indexer.storeUpdateForwardIndexChan
-	 	log.Println(request)
 	 	//如果传过来的持久化请求中的DocTokenLen小于0,则是删除请求，即从RemoveDocs（）函数中传过来的
 	 	if request.DocTokenLen<0 {
 	 		indexer.dbforwardIndex.Delete([]byte(request.DocID))
@@ -235,7 +234,6 @@ func (indexer *Indexer) StoreUpdateReverseIndexWorker() {
 	}
 	for {
 		request := <-indexer.storeUpdateReverseIndexChan
-		log.Println(request)
 		buf:=bytes.Buffer{}
 		enc:=gob.NewEncoder(&buf)
 		enc.Encode(request.KeywordIndices)
