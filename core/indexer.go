@@ -287,7 +287,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 				DocTokenLen: doc.TokenLen,
 				Field:doc.Field,
 			}:
-				log.Println("a forwardindex is send to store")
+				//log.Println("a forwardindex is send to store")
 			case <-timer.C:
 				log.Println("timeout")
 			}
@@ -344,7 +344,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 				Token:          keyword.Text,
 				KeywordIndices: *indices,
 			}:
-				log.Println("a reverseindex is send to store")
+				//log.Println("a reverseindex is send to store")
 			case <-timer.C:
 				log.Println("timeout")
 			}
