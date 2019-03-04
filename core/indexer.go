@@ -20,10 +20,9 @@ Package core is riot core
 package core
 
 import (
+	"github.com/rebirthcat/riot/store"
 	"log"
 	"math"
-	"github.com/rebirthcat/riot/store"
-	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -84,9 +83,9 @@ type Indexer struct {
 	//表示保存在持久化文件中的文档树量(因为该值只做统计使用，不参与搜索的bm25的计算，所以不适合放到tableLock里)
 	numDocsStore	uint64
 
-	storeUpdateForwardIndexFinsh bool
-
-	storeUpdateReverseIndexFinsh bool
+	//storeUpdateForwardIndexFinsh bool
+	//
+	//storeUpdateReverseIndexFinsh bool
 
 }
 
@@ -100,12 +99,6 @@ type KeywordIndices struct {
 
 func (indexer *Indexer) Flush(wg *sync.WaitGroup) {
 	indexer.AddDocToCache(nil,true)
-	for  {
-		runtime.Gosched()
-		if indexer.storeUpdateForwardIndexFinsh &&indexer.storeUpdateReverseIndexFinsh{
-			break
-		}
-	}
 	wg.Done()
 
 }
@@ -280,7 +273,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indexer.ranker.lock.fields[doc.DocId]=doc.Field
 			indexer.ranker.lock.Unlock()
 			//发送至持久化
-			timer=time.NewTimer(time.Millisecond*10)
+			timer=time.NewTimer(time.Millisecond*100)
 			select {
 			case indexer.storeUpdateForwardIndexChan <- StoreForwardIndexReq{
 				DocID:       doc.DocId,
@@ -335,9 +328,9 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indices.docIds[position] = doc.DocId
 			//发送至持久化
 			if timer==nil {
-				timer=time.NewTimer(time.Millisecond*10)
+				timer=time.NewTimer(time.Millisecond*100)
 			}else {
-				timer.Reset(time.Millisecond*10)
+				timer.Reset(time.Millisecond*100)
 			}
 			select {
 			case indexer.storeUpdateReverseIndexChan <- StoreReverseIndexReq{
@@ -355,6 +348,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indexer.tableLock.numDocs++
 		}
 	}
+
 }
 
 // RemoveDocToCache 向 REMOVECACHE 中加入一个待删除文档
@@ -419,7 +413,7 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 		delete(indexer.ranker.lock.fields,docId)
 		indexer.ranker.lock.Unlock()
 		//持久化
-		timer=time.NewTimer(time.Millisecond*10)
+		timer=time.NewTimer(time.Millisecond*100)
 		select {
 		case indexer.storeUpdateForwardIndexChan<-StoreForwardIndexReq{
 			DocID:docId,
@@ -486,9 +480,9 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 		}
 		//持久化
 		if timer == nil {
-			timer=time.NewTimer(time.Millisecond*10)
+			timer=time.NewTimer(time.Millisecond*100)
 		}else {
-			timer.Reset(time.Millisecond*10)
+			timer.Reset(time.Millisecond*100)
 		}
 		select {
 		case indexer.storeUpdateReverseIndexChan <- StoreReverseIndexReq{

@@ -57,13 +57,12 @@ func GetVersion() string {
 
 // Engine initialize the engine
 type Engine struct {
-	//lock  sync.RWMutex
 
 	// 计数器，用来统计有多少文档被索引等信息
-	numDocsIndexed      uint64
-	numTokenIndexAdded   uint64
-	numDocsStored        uint64
-	isFlushing          int
+	//numDocsIndexed      uint64
+	//numTokenIndexAdded   uint64
+	//numDocsStored        uint64
+	//isFlushing          int
 
 	// 记录初始化参数
 	initOptions types.EngineOpts
@@ -217,11 +216,9 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	}
 	wg.Wait()
 	log.Println("index recover finish")
-	for _, indexer := range engine.indexers {
-		engine.numDocsIndexed+=indexer.GetNumDocs()
-		engine.numTokenIndexAdded+=indexer.GetNumTotalTokenLen()
-		engine.numDocsStored+=indexer.GetNumDocsStore()
-	}
+	log.Printf("store number is %v",engine.NumDocsIndexedStore())
+	log.Printf("document number is %v",engine.NumDocsIndexed())
+	log.Printf("tokens number is %v",engine.NumTokensAdded())
 	// 初始化分词器通道
 	engine.segmenterChan = make(
 		chan segmenterReq, options.NumGseThreads)
@@ -270,12 +267,13 @@ func (engine *Engine) Init(options types.EngineOpts) {
 //      2. 这个函数调用是非同步的，也就是说在函数返回时有可能文档还没有加入索引中，因此
 //         如果立刻调用Search可能无法查询到这个文档。强制刷新索引请调用FlushIndex函数。
 func (engine *Engine) IndexDoc(docId string, data types.DocData,
-	forceUpdate ...bool) {
-	engine.Index(docId, data, forceUpdate...)
+	forceUpdate ...bool) error{
+	engine.index(docId, data, forceUpdate...)
+	return nil
 }
 
 // Index add the document to the index
-func (engine *Engine) Index(docId string, data types.DocData,
+func (engine *Engine) index(docId string, data types.DocData,
 	forceUpdate ...bool) {
 
 	var force bool
@@ -310,7 +308,7 @@ func (engine *Engine) internalIndexDoc(docId string, data types.DocData,
 //      1. 这个函数是线程安全的，请尽可能并发调用以提高索引速度
 //      2. 这个函数调用是非同步的，也就是说在函数返回时有可能文档还没有加入索引中，因此
 //         如果立刻调用 Search 可能无法查询到这个文档。强制刷新索引请调用 FlushIndex 函数。
-func (engine *Engine) RemoveDoc(docId string, forceUpdate ...bool) {
+func (engine *Engine) RemoveDoc(docId string, forceUpdate ...bool) error{
 	var force bool
 	if len(forceUpdate) > 0 {
 		force = forceUpdate[0]
@@ -324,6 +322,7 @@ func (engine *Engine) RemoveDoc(docId string, forceUpdate ...bool) {
 		engine.indexerRemoveDocChans[shard] <- indexerRemoveDocReq{
 			docId: docId, forceUpdate: force}
 	}
+	return nil
 }
 
 // // 获取文本的分词结果
@@ -692,19 +691,20 @@ func (engine *Engine) FlushIndex() {
 // 关闭引擎
 func (engine *Engine) Close() {
 	engine.Flush()
-	if engine.initOptions.UseStore {
-		for _, indexer := range engine.indexers {
-			dbf:=indexer.GetForwardIndexDB()
-			if dbf!=nil {
-				dbf.Close()
-			}
-			dbr:=indexer.GetReverseIndexDB()
-			if dbr!=nil {
-				dbr.Close()
-			}
+	time.Sleep(time.Second*300)
+	for _, indexer := range engine.indexers {
+		dbf:=indexer.GetForwardIndexDB()
+		if dbf!=nil {
+			dbf.Close()
+		}
+		dbr:=indexer.GetReverseIndexDB()
+		if dbr!=nil {
+			dbr.Close()
 		}
 	}
 }
+
+
 
 // 从文本hash得到要分配到的 shard
 func (engine *Engine) getShard(hash uint32) int {
