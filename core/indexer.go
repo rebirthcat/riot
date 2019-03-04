@@ -22,15 +22,15 @@ package core
 import (
 	"log"
 	"math"
-	"riot/store"
+	"github.com/rebirthcat/riot/store"
 	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"riot/types"
-	"riot/utils"
+	"github.com/rebirthcat/riot/types"
+	"github.com/rebirthcat/riot/utils"
 )
 
 

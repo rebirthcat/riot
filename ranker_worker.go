@@ -16,7 +16,7 @@
 package riot
 
 import (
-	"riot/types"
+	"github.com/rebirthcat/riot/types"
 )
 
 type rankerAddDocReq struct {

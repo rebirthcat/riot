@@ -20,8 +20,8 @@ import (
 	"os"
 	"strings"
 
-	"riot/core"
-	"riot/types"
+	"github.com/rebirthcat/riot/core"
+	"github.com/rebirthcat/riot/types"
 	toml "github.com/go-vgo/gt/conf"
 )
 

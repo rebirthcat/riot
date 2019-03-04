@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"log"
-	"riot/store"
+	"github.com/rebirthcat/riot/store"
 	"sync"
 	"sync/atomic"
 	"time"

@@ -28,9 +28,9 @@ import (
 	"sync"
 	"time"
 
-	"riot/core"
-	"riot/types"
-	"riot/utils"
+	"github.com/rebirthcat/riot/core"
+	"github.com/rebirthcat/riot/types"
+	"github.com/rebirthcat/riot/utils"
 
 	"github.com/go-ego/gse"
 	"github.com/go-ego/murmur"

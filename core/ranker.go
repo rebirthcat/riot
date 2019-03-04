@@ -17,8 +17,8 @@ package core
 
 import (
 	"log"
-	"riot/types"
-	"riot/utils"
+	"github.com/rebirthcat/riot/types"
+	"github.com/rebirthcat/riot/utils"
 	"sort"
 	"sync"
 )
