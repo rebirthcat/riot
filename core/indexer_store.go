@@ -12,9 +12,9 @@ import (
 //系统重启时从持久化文件中读出来的一行数据所反序列化得到的类型
 type StoreForwardIndex struct {
 	//用于恢复docTokenLens map[string]float32
-	tokenLen float32
+	TokenLen float32
 	//用于恢复ranker的排序字段field
-	field interface{}
+	Field interface{}
 }
 
 
@@ -84,10 +84,10 @@ func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string
 		log.Println(fowardindex)
 		if err == nil {
 			docsState[keystring] = 0
-			docTokenLens[keystring] = fowardindex.tokenLen
+			docTokenLens[keystring] = fowardindex.TokenLen
 			numDocs++
-			totalTokenLen += fowardindex.tokenLen
-			fields[keystring]=fowardindex.field
+			totalTokenLen += fowardindex.TokenLen
+			fields[keystring]=fowardindex.Field
 			docsExist[keystring]=true
 		}
 		return nil
@@ -218,8 +218,8 @@ func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
 			buf := bytes.Buffer{}
 			enc := gob.NewEncoder(&buf)
 			enc.Encode(StoreForwardIndex{
-				tokenLen: request.DocTokenLen,
-				field:    request.Field,
+				TokenLen: request.DocTokenLen,
+				Field:    request.Field,
 			})
 			indexer.dbforwardIndex.Set([]byte(request.DocID), buf.Bytes())
 			atomic.AddUint64(&indexer.numDocsStore, 1)
