@@ -34,6 +34,7 @@ var (
 	}
 	defaultIndexerOpts = IndexerOpts{
 		IndexType:      FrequenciesIndex,
+		DocCacheSize:defaultDocCacheSize,
 		BM25Parameters: &defaultBM25Parameters,
 	}
 	defaultBM25Parameters = BM25Parameters{

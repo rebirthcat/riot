@@ -216,6 +216,7 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		go engine.indexers[shard].StoreRecoverReverseIndex(dbPathReverseIndex,engine.initOptions.StoreEngine,&wg)
 	}
 	wg.Wait()
+	log.Println("index recover finish")
 	for _, indexer := range engine.indexers {
 		engine.numDocsIndexed+=indexer.GetNumDocs()
 		engine.numTokenIndexAdded+=indexer.GetNumTotalTokenLen()
