@@ -37,7 +37,7 @@ type Ranker struct {
 }
 
 // Init init ranker
-func (ranker *Ranker) Init(shard int,onlyID bool,docNumber uint64) {
+func (ranker *Ranker) Init(shard int,onlyID bool) {
 	if ranker.initialized == true {
 		log.Fatal("The Ranker can not be initialized twice.")
 	}
@@ -48,8 +48,8 @@ func (ranker *Ranker) Init(shard int,onlyID bool,docNumber uint64) {
 	//}
 	ranker.idOnly=onlyID
 
-	ranker.lock.fields = make(map[string]interface{},docNumber)
-	ranker.lock.docs = make(map[string]bool,docNumber)
+	ranker.lock.fields = make(map[string]interface{})
+	ranker.lock.docs = make(map[string]bool)
 	ranker.shardNumber=shard
 }
 

@@ -71,15 +71,15 @@ func (indexer *Indexer)OpenReverseIndexDB(dbPath string,StoreEngine string)  {
 
 
 
-func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
+func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string,docNumber uint64, wg *sync.WaitGroup)  {
 	//indexer中的字段
 	numDocs:= uint64(0)
 	totalTokenLen:=float32(0)
-	docsState:=make(map[string]int,numDocs)
-	docTokenLens:=make(map[string]float32,numDocs)
+	docsState:=make(map[string]int,docNumber)
+	docTokenLens:=make(map[string]float32,docNumber)
 	//ranker中的字段
-	fields:=make(map[string]interface{},numDocs)
-	docsExist:=make(map[string]bool,numDocs)
+	fields:=make(map[string]interface{},docNumber)
+	docsExist:=make(map[string]bool,docNumber)
 	var erropen error
 	indexer.dbforwardIndex, erropen= store.OpenStore(dbPath, StoreEngine)
 	if indexer.dbforwardIndex == nil || erropen != nil {
@@ -125,8 +125,8 @@ func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string
 
 
 
-func (indexer *Indexer)StoreRecoverReverseIndex(dbPath string,StoreEngine string, wg *sync.WaitGroup)  {
-	table:=make(map[string]*KeywordIndices)
+func (indexer *Indexer)StoreRecoverReverseIndex(dbPath string,StoreEngine string,tokenNumber uint64, wg *sync.WaitGroup)  {
+	table:=make(map[string]*KeywordIndices,tokenNumber)
 	var erropen error
 	indexer.dbRevertIndex,erropen=store.OpenStore(dbPath,StoreEngine)
 	if indexer.dbRevertIndex==nil||erropen!=nil {

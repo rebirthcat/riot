@@ -204,15 +204,15 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	wg.Add(options.NumShards*2)
 	for shard := 0; shard < options.NumShards; shard++ {
 		engine.rankers = append(engine.rankers, &core.Ranker{})
-		engine.rankers[shard].Init(shard,options.IDOnly,options.DocNumber)
+		engine.rankers[shard].Init(shard,options.IDOnly)
 		engine.indexers = append(engine.indexers, &core.Indexer{})
-		engine.indexers[shard].Init(shard,options.StoreIndexBufLen, *options.IndexerOpts,engine.rankers[shard],options.DocNumber,options.TokenNumber)
+		engine.indexers[shard].Init(shard,options.StoreIndexBufLen, *options.IndexerOpts,engine.rankers[shard])
 		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
-		go engine.indexers[shard].StoreRecoverForwardIndex(dbPathForwardIndex,engine.initOptions.StoreEngine,&wg)
-		go engine.indexers[shard].StoreRecoverReverseIndex(dbPathReverseIndex,engine.initOptions.StoreEngine,&wg)
+		go engine.indexers[shard].StoreRecoverForwardIndex(dbPathForwardIndex,engine.initOptions.StoreEngine,engine.initOptions.DocNumber,&wg)
+		go engine.indexers[shard].StoreRecoverReverseIndex(dbPathReverseIndex,engine.initOptions.StoreEngine,engine.initOptions.TokenNumber,&wg)
 	}
 	wg.Wait()
 	log.Println("index recover finish")
