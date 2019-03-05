@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"encoding/gob"
 	"github.com/rebirthcat/riot/store"
+	"github.com/rebirthcat/riot/types"
 	"log"
 	"sync"
 	"sync/atomic"
 )
+
+
 
 //系统重启时从持久化文件中读出来的一行数据所反序列化得到的类型
 type StoreForwardIndex struct {
@@ -17,6 +20,12 @@ type StoreForwardIndex struct {
 	Field interface{}
 }
 
+type StoreForwardIndexReq struct {
+	DocID string
+	Remove bool
+	DocTokenLen float32
+	Field interface{}
+}
 
 type StoreReverseIndex struct {
 	DocIds []string
@@ -28,20 +37,6 @@ type StoreReverseIndex struct {
 type StoreReverseIndexReq struct {
 	Token string
 	KeywordIndices StoreReverseIndex
-}
-
-//type KeywordIndices struct {
-//	// 下面的切片是否为空，取决于初始化时IndexType的值
-//	docIds      []string  // 全部类型都有
-//	frequencies []float32 // IndexType == FrequenciesIndex
-//	locations   [][]int   // IndexType == LocsIndex
-//}
-
-
-type StoreForwardIndexReq struct {
-	DocID string
-	DocTokenLen float32
-	Field interface{}
 }
 
 
@@ -75,8 +70,11 @@ func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string
 	//indexer中的字段
 	numDocs:= uint64(0)
 	totalTokenLen:=float32(0)
+	var docTokenLens map[string]float32
+	if indexer.initOptions.IndexType!=types.DocIdsIndex {
+		docTokenLens=make(map[string]float32,docNumber)
+	}
 	docsState:=make(map[string]int,docNumber)
-	docTokenLens:=make(map[string]float32,docNumber)
 	//ranker中的字段
 	fields:=make(map[string]interface{},docNumber)
 	docsExist:=make(map[string]bool,docNumber)
@@ -98,20 +96,24 @@ func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string
 		//log.Println(fowardindex)
 		if err == nil {
 			docsState[keystring] = 0
-			docTokenLens[keystring] = fowardindex.TokenLen
-			numDocs++
-			totalTokenLen += fowardindex.TokenLen
+			if indexer.initOptions.IndexType!=types.DocIdsIndex {
+				docTokenLens[keystring] = fowardindex.TokenLen
+				totalTokenLen += fowardindex.TokenLen
+			}
 			fields[keystring]=fowardindex.Field
 			docsExist[keystring]=true
+			numDocs++
 		}
 		return nil
 	})
 	//恢复indexer
 	indexer.tableLock.Lock()
-	indexer.tableLock.totalTokenLen=totalTokenLen
-	indexer.tableLock.numDocs=numDocs
-	indexer.tableLock.docTokenLens=docTokenLens
+	if indexer.initOptions.IndexType!=types.DocIdsIndex {
+		indexer.tableLock.totalTokenLen=totalTokenLen
+		indexer.tableLock.docTokenLens=docTokenLens
+	}
 	indexer.tableLock.docsState=docsState
+	indexer.tableLock.numDocs=numDocs
 	indexer.tableLock.Unlock()
 	atomic.AddUint64(&indexer.numDocsStore,numDocs)
 	//恢复ranker
@@ -145,11 +147,20 @@ func (indexer *Indexer)StoreRecoverReverseIndex(dbPath string,StoreEngine string
 		//log.Println(keywordIndices)
 		if err == nil {
 			// 添加索引
-			table[keystring]=&KeywordIndices{
-				docIds:storereverse.DocIds,
-				frequencies:storereverse.Frequencies,
-				locations:storereverse.Locations,
+			if indexer.initOptions.IndexType!=types.DocIdsIndex {
+				table[keystring]=&KeywordIndices{
+					docIds:storereverse.DocIds,
+					frequencies:storereverse.Frequencies,
+					locations:storereverse.Locations,
+				}
+			}else {
+				table[keystring]=&KeywordIndices{
+					docIds:storereverse.DocIds,
+					frequencies:nil,
+					locations:nil,
+				}
 			}
+
 		}
 		return nil
 	})
@@ -229,17 +240,23 @@ func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
 	for {
 	 	request := <-indexer.storeUpdateForwardIndexChan
 	 	//如果传过来的持久化请求中的DocTokenLen小于0,则是删除请求，即从RemoveDocs（）函数中传过来的
-	 	if request.DocTokenLen<0 {
+	 	if request.Remove {
 	 		indexer.dbforwardIndex.Delete([]byte(request.DocID))
 	 		atomic.AddUint64(&indexer.numDocsStore,^uint64(1-1))
 	 		continue
 	 	}else {
 			buf := bytes.Buffer{}
 			enc := gob.NewEncoder(&buf)
-			enc.Encode(StoreForwardIndex{
-				TokenLen: request.DocTokenLen,
-				Field:    request.Field,
-			})
+			if indexer.initOptions.IndexType!=types.DocIdsIndex {
+				enc.Encode(StoreForwardIndex{
+					TokenLen: request.DocTokenLen,
+					Field:    request.Field,
+				})
+			}else {
+				enc.Encode(StoreForwardIndex{
+					Field:    request.Field,
+				})
+			}
 			indexer.dbforwardIndex.Set([]byte(request.DocID), buf.Bytes())
 			atomic.AddUint64(&indexer.numDocsStore, 1)
 		}

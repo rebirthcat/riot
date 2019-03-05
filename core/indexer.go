@@ -265,25 +265,28 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 
 		// 更新文档关键词总长度
 		var timer *time.Timer
-		if doc.TokenLen != 0 {
+		indexer.ranker.lock.Lock()
+		indexer.ranker.lock.docs[doc.DocId] = true
+		indexer.ranker.lock.fields[doc.DocId] = doc.Field
+		indexer.ranker.lock.Unlock()
+
+		storeforwardreq:=StoreForwardIndexReq{
+			DocID:doc.DocId,
+			Remove:false,
+			Field:doc.Field,
+		}
+
+		if indexer.initOptions.IndexType!=types.DocIdsIndex {
 			indexer.tableLock.docTokenLens[doc.DocId] = float32(doc.TokenLen)
 			indexer.tableLock.totalTokenLen += doc.TokenLen
-			indexer.ranker.lock.Lock()
-			indexer.ranker.lock.docs[doc.DocId]=true
-			indexer.ranker.lock.fields[doc.DocId]=doc.Field
-			indexer.ranker.lock.Unlock()
-			//发送至持久化
-			timer=time.NewTimer(time.Millisecond*100)
-			select {
-			case indexer.storeUpdateForwardIndexChan <- StoreForwardIndexReq{
-				DocID:       doc.DocId,
-				DocTokenLen: doc.TokenLen,
-				Field:doc.Field,
-			}:
-				//log.Println("a forwardindex is send to store")
-			case <-timer.C:
-				log.Println("timeout")
-			}
+			storeforwardreq.DocTokenLen=doc.TokenLen
+		}
+		timer = time.NewTimer(time.Millisecond * 100)
+		select {
+		case indexer.storeUpdateForwardIndexChan <- storeforwardreq:
+			//log
+		case <-timer.C:
+			log.Println("timeout")
 		}
 
 		docIdIsNew := true
@@ -326,6 +329,14 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indices.docIds = append(indices.docIds, "0")
 			copy(indices.docIds[position+1:], indices.docIds[position:])
 			indices.docIds[position] = doc.DocId
+
+			storereversereq:=StoreReverseIndexReq{}
+			storereversereq.Token=keyword.Text
+			storereversereq.KeywordIndices.DocIds=indices.docIds
+			if indexer.initOptions.IndexType!=types.DocIdsIndex {
+				storereversereq.KeywordIndices.Frequencies=indices.frequencies
+				storereversereq.KeywordIndices.Locations=indices.locations
+			}
 			//发送至持久化
 			if timer==nil {
 				timer=time.NewTimer(time.Millisecond*100)
@@ -333,14 +344,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 				timer.Reset(time.Millisecond*100)
 			}
 			select {
-			case indexer.storeUpdateReverseIndexChan <- StoreReverseIndexReq{
-				Token:          keyword.Text,
-				KeywordIndices: StoreReverseIndex{
-					DocIds:indices.docIds,
-					Frequencies:indices.frequencies,
-					Locations:indices.locations,
-				},
-			}:
+			case indexer.storeUpdateReverseIndexChan <- storereversereq:
 				//log.Println("a reverseindex is send to store")
 			case <-timer.C:
 				log.Println("timeout")
@@ -409,22 +413,27 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 	// 更新文档关键词总长度，删除文档状态
 	var timer *time.Timer
 	for _, docId := range *docs {
-		indexer.tableLock.totalTokenLen -= indexer.tableLock.docTokenLens[docId]
-		delete(indexer.tableLock.docTokenLens, docId)
-		delete(indexer.tableLock.docsState, docId)
+
 		indexer.ranker.lock.Lock()
 		delete(indexer.ranker.lock.docs,docId)
 		delete(indexer.ranker.lock.fields,docId)
 		indexer.ranker.lock.Unlock()
+
+		if indexer.initOptions.IndexType!=types.DocIdsIndex {
+			indexer.tableLock.totalTokenLen -= indexer.tableLock.docTokenLens[docId]
+			delete(indexer.tableLock.docTokenLens, docId)
+		}
+		//delete(indexer.tableLock.docTokenLens, docId)
+		delete(indexer.tableLock.docsState, docId)
+		storeforwardreq:=StoreForwardIndexReq{
+			DocID:docId,
+			Remove:true,
+		}
 		//持久化
 		timer=time.NewTimer(time.Millisecond*100)
 		select {
-		case indexer.storeUpdateForwardIndexChan<-StoreForwardIndexReq{
-			DocID:docId,
-			DocTokenLen:-1,
-			Field:nil,
-		}:
-			log.Println("a forwardindex is send to remove")
+		case indexer.storeUpdateForwardIndexChan<-storeforwardreq:
+			//log.Println("a forwardindex is send to remove")
 		case <-timer.C:
 			log.Println("timeout")
 		}
@@ -482,6 +491,15 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 			delete(indexer.tableLock.table, keyword)
 
 		}
+
+		storereversereq:=StoreReverseIndexReq{}
+		storereversereq.Token=keyword
+		storereversereq.KeywordIndices.DocIds=indices.docIds
+
+		if indexer.initOptions.IndexType!=types.DocIdsIndex {
+			storereversereq.KeywordIndices.Frequencies=indices.frequencies
+			storereversereq.KeywordIndices.Locations=indices.locations
+		}
 		//持久化
 		if timer == nil {
 			timer=time.NewTimer(time.Millisecond*100)
@@ -489,14 +507,7 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 			timer.Reset(time.Millisecond*100)
 		}
 		select {
-		case indexer.storeUpdateReverseIndexChan <- StoreReverseIndexReq{
-			Token:          keyword,
-			KeywordIndices: StoreReverseIndex{
-				DocIds:indices.docIds,
-				Frequencies:indices.frequencies,
-				Locations:indices.locations,
-			},
-		}:
+		case indexer.storeUpdateReverseIndexChan <-storereversereq:
 			log.Println("a reverseindex is send to set")
 		case <-timer.C:
 			log.Println("timeout")

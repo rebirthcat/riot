@@ -146,7 +146,6 @@ func (engine *Engine)GetNumReverseTableLen()uint64  {
 		num+=engine.indexers[shard].GetTableLen()
 	}
 	return num
-
 }
 
 //// HasDocDB if the document is exist in the database

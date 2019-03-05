@@ -691,7 +691,10 @@ func (engine *Engine) FlushIndex() {
 // 关闭引擎
 func (engine *Engine) Close() {
 	engine.Flush()
-	time.Sleep(time.Second*300)
+	//time.Sleep(time.Second*300)
+	for i, indexer := range engine.indexers {
+		log.Printf("indexer %v :document number is %v,reverse index table len is %v",i,indexer.GetNumDocsStore(),indexer.GetTableLen())
+	}
 	for _, indexer := range engine.indexers {
 		dbf:=indexer.GetForwardIndexDB()
 		if dbf!=nil {
@@ -702,6 +705,7 @@ func (engine *Engine) Close() {
 			dbr.Close()
 		}
 	}
+
 }
 
 
