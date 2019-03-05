@@ -42,7 +42,7 @@ var (
 		B:  0.75,
 	}
 	defaultStoreShards = 8
-	defaultStoreChanBufLen=2000
+	defaultStoreChanBufLen=800
 )
 
 // EngineOpts init engine options
@@ -110,6 +110,9 @@ type EngineOpts struct {
 	StoreEngine string `toml:"store_engine"`
 
 	IDOnly bool `toml:"id_only"`
+	//第一次启动时预估文档数量和索引关键词数量，恢复启动时自动从文件中读出准确数量
+	DocNumber uint64
+	TokenNumber uint64
 }
 
 // Init init engine options
@@ -151,6 +154,14 @@ func (options *EngineOpts) Init() {
 		options.IndexerOpts.BM25Parameters = &defaultBM25Parameters
 	}
 
+	if options.IndexerOpts.DocCacheSize==0 {
+		options.IndexerOpts.DocCacheSize=defaultDocCacheSize
+	}
+
+	if options.IndexerOpts.IndexType==0 {
+		options.IndexerOpts.IndexType=FrequenciesIndex
+	}
+
 	if options.DefRankOpts == nil {
 		options.DefRankOpts = &defaultRankOpts
 	}
@@ -166,8 +177,4 @@ func (options *EngineOpts) Init() {
 	if options.StoreIndexBufLen==0 {
 		options.StoreIndexBufLen=defaultStoreChanBufLen
 	}
-
-	//if options.StoreRankerBufLen==0 {
-	//	options.StoreRankerBufLen=defaultStoreChanBufLen
-	//}
 }

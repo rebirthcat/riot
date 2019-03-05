@@ -129,7 +129,7 @@ func (indexer *Indexer)GetNumTotalTokenLen()uint64  {
 
 
 // Init 初始化索引器
-func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.IndexerOpts,ranker *Ranker) {
+func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.IndexerOpts,ranker *Ranker,docNumber uint64,tokenNumber uint64) {
 	if indexer.initialized == true {
 		log.Fatal("The Indexer can not be initialized twice.")
 	}
@@ -137,14 +137,14 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.Indexe
 	indexer.initOptions = options
 	indexer.initialized = true
 
-	indexer.tableLock.table = make(map[string]*KeywordIndices)
-	indexer.tableLock.docsState = make(map[string]int)
+	indexer.tableLock.table = make(map[string]*KeywordIndices,tokenNumber)
+	indexer.tableLock.docsState = make(map[string]int,docNumber)
 	indexer.addCacheLock.addCache = make(
 		[]*types.DocIndex, indexer.initOptions.DocCacheSize)
 
 	indexer.removeCacheLock.removeCache = make(
 		[]string, indexer.initOptions.DocCacheSize*2)
-	indexer.tableLock.docTokenLens = make(map[string]float32)
+	indexer.tableLock.docTokenLens = make(map[string]float32,docNumber)
 	indexer.ranker=ranker
 	indexer.storeUpdateForwardIndexChan=make(chan StoreForwardIndexReq,StoreChanBufLen)
 	indexer.storeUpdateReverseIndexChan=make(chan StoreReverseIndexReq,StoreChanBufLen)
