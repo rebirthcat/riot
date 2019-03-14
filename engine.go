@@ -20,9 +20,9 @@ Package riot is riot engine
 package riot
 
 import (
+	"container/heap"
 	"fmt"
 	"log"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,18 +58,11 @@ func GetVersion() string {
 // Engine initialize the engine
 type Engine struct {
 
-	// 计数器，用来统计有多少文档被索引等信息
-	//numDocsIndexed      uint64
-	//numTokenIndexAdded   uint64
-	//numDocsStored        uint64
-	//isFlushing          int
-
 	// 记录初始化参数
 	initOptions types.EngineOpts
 	initialized bool
 
 	indexers   []*core.Indexer
-	rankers    []*core.Ranker
 	segmenter  gse.Segmenter
 	loaded     bool
 	stopTokens StopTokens
@@ -80,7 +73,6 @@ type Engine struct {
 
 	// 建立排序器使用的通信通道
 	indexerLookupChans   []chan indexerLookupReq
-	rankerRankChans      []chan rankerRankReq
 }
 
 
@@ -106,18 +98,6 @@ func (engine *Engine) Indexer(options types.EngineOpts) {
 			chan indexerLookupReq, options.IndexerBufLen)
 	}
 }
-
-// Ranker initialize the ranker channel
-func (engine *Engine) Ranker(options types.EngineOpts) {
-	engine.rankerRankChans = make(
-		[]chan rankerRankReq, options.NumShards)
-
-	for shard := 0; shard < options.NumShards; shard++ {
-		engine.rankerRankChans[shard] = make(
-			chan rankerRankReq, options.RankerBufLen)
-	}
-}
-
 
 
 // CheckMem check the memory when the memory is larger
@@ -203,10 +183,10 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	wg:=sync.WaitGroup{}
 	wg.Add(options.NumShards*2)
 	for shard := 0; shard < options.NumShards; shard++ {
-		engine.rankers = append(engine.rankers, &core.Ranker{})
-		engine.rankers[shard].Init(shard,options.IDOnly)
+		//engine.rankers = append(engine.rankers, &core.Ranker{})
+		//engine.rankers[shard].Init(shard,options.IDOnly)
 		engine.indexers = append(engine.indexers, &core.Indexer{})
-		engine.indexers[shard].Init(shard,options.StoreIndexBufLen, *options.IndexerOpts,engine.rankers[shard])
+		engine.indexers[shard].Init(shard,options.StoreIndexBufLen, *options.IndexerOpts)
 		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
@@ -227,7 +207,7 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	engine.Indexer(options)
 
 	// 初始化排序器通道
-	engine.Ranker(options)
+	//engine.Ranker(options)
 
 	// engine.CheckMem(engine.initOptions.UseStore)
 	engine.CheckMem()
@@ -247,9 +227,6 @@ func (engine *Engine) Init(options types.EngineOpts) {
 
 		for i := 0; i < options.NumIndexerThreads; i++ {
 			go engine.indexerLookup(shard)
-		}
-		for i := 0; i < options.NumRankerThreads; i++ {
-			go engine.rankerRank(shard)
 		}
 	}
 }
@@ -400,80 +377,52 @@ func maxRankOutput(rankOpts types.RankOpts, rankLen int) (int, int) {
 	return start, end
 }
 
-func (engine *Engine) rankOutID(rankerOutput rankerReturnReq,
-	rankOutArr types.ScoredIDs) types.ScoredIDs {
-	for _, doc := range rankerOutput.docs.(types.ScoredIDs) {
-		rankOutArr = append(rankOutArr, doc)
-	}
-	return rankOutArr
-}
+//func (engine *Engine) rankOutID(rankerOutput rankerReturnReq, rankOutArr types.ScoredIDs) types.ScoredIDs {
+//	for _, doc := range rankerOutput.docs {
+//		rankOutArr = append(rankOutArr, doc)
+//	}
+//	return rankOutArr
+//}
 
-func (engine *Engine) rankOutDocs(rankerOutput rankerReturnReq,
-	rankOutArr types.ScoredDocs) types.ScoredDocs {
-	for _, doc := range rankerOutput.docs.(types.ScoredDocs) {
-		rankOutArr = append(rankOutArr, doc)
-	}
-	return rankOutArr
-}
+//func (engine *Engine) rankOutDocs(rankerOutput rankerReturnReq,
+//	rankOutArr types.ScoredDocs) types.ScoredDocs {
+//	for _, doc := range rankerOutput.docs.(types.ScoredDocs) {
+//		rankOutArr = append(rankOutArr, doc)
+//	}
+//	return rankOutArr
+//}
 
 // NotTimeOut not set engine timeout
-func (engine *Engine) NotTimeOut(request types.SearchReq,
-	rankerReturnChan chan rankerReturnReq) (
-	rankOutArr interface{}, numDocs int) {
-
-	var (
-		rankOutID  types.ScoredIDs
-		rankOutDoc types.ScoredDocs
-		idOnly     = engine.initOptions.IDOnly
-	)
+func (engine *Engine) NotTimeOut(request types.SearchReq, rankerReturnChan chan rankerReturnReq) (
+	rankOutID []types.ScoredIDs, numDocs int) {
 
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		rankerOutput := <-rankerReturnChan
 		if !request.CountDocsOnly {
 			if rankerOutput.docs != nil {
-				if idOnly {
-					rankOutID = engine.rankOutID(rankerOutput, rankOutID)
-				} else {
-					rankOutDoc = engine.rankOutDocs(rankerOutput, rankOutDoc)
-				}
+				//rankOutID=append(rankOutID,rankerOutput.docs...)
+				rankOutID[shard] = rankerOutput.docs
 			}
 		}
 		numDocs += rankerOutput.numDocs
 	}
-
-	if idOnly {
-		rankOutArr = rankOutID
-		return
-	}
-
-	rankOutArr = rankOutDoc
 	return
 }
 
 // TimeOut set engine timeout
 func (engine *Engine) TimeOut(request types.SearchReq,
 	rankerReturnChan chan rankerReturnReq) (
-	rankOutArr interface{}, numDocs int, isTimeout bool) {
+	rankOutID  []types.ScoredIDs, numDocs int, isTimeout bool) {
 
 	deadline := time.Now().Add(time.Nanosecond *
 		time.Duration(NumNanosecondsInAMillisecond*request.Timeout))
-
-	var (
-		rankOutID  types.ScoredIDs
-		rankOutDoc types.ScoredDocs
-		idOnly     = engine.initOptions.IDOnly
-	)
 
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		select {
 		case rankerOutput := <-rankerReturnChan:
 			if !request.CountDocsOnly {
 				if rankerOutput.docs != nil {
-					if idOnly {
-						rankOutID = engine.rankOutID(rankerOutput, rankOutID)
-					} else {
-						rankOutDoc = engine.rankOutDocs(rankerOutput, rankOutDoc)
-					}
+					rankOutID[shard]=rankerOutput.docs
 				}
 			}
 			numDocs += rankerOutput.numDocs
@@ -482,114 +431,74 @@ func (engine *Engine) TimeOut(request types.SearchReq,
 			break
 		}
 	}
-
-	if idOnly {
-		rankOutArr = rankOutID
-		return
-	}
-
-	rankOutArr = rankOutDoc
 	return
 }
 
 // RankID rank docs by types.ScoredIDs
-func (engine *Engine) RankID(request types.SearchReq, rankOpts types.RankOpts,
-	tokens []string, rankerReturnChan chan rankerReturnReq) (output types.SearchResp) {
+func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerReturnChan chan rankerReturnReq) (
+	output types.SearchID) {
 	// 从通信通道读取排序器的输出
 	numDocs := 0
-	rankOutput := types.ScoredIDs{}
+	rankOutputArr := []types.ScoredIDs{}
 
 	//**********/ begin
 	timeout := request.Timeout
 	isTimeout := false
 	if timeout <= 0 {
 		// 不设置超时
-		rankOutArr, num := engine.NotTimeOut(request, rankerReturnChan)
-		rankOutput = rankOutArr.(types.ScoredIDs)
-		numDocs += num
+		rankOutputArr, numDocs = engine.NotTimeOut(request, rankerReturnChan)
+		//numDocs += num
 	} else {
 		// 设置超时
-		rankOutArr, num, timeout := engine.TimeOut(request, rankerReturnChan)
-		rankOutput = rankOutArr.(types.ScoredIDs)
-		numDocs += num
-		isTimeout = timeout
+		rankOutputArr, numDocs, isTimeout = engine.TimeOut(request, rankerReturnChan)
+		//numDocs += num
 	}
 
-	// 再排序
-	if !request.CountDocsOnly && !request.Orderless {
-		if rankOpts.ReverseOrder {
-			sort.Sort(sort.Reverse(rankOutput))
-		} else {
-			sort.Sort(rankOutput)
+	// 再排序 使用堆排序
+	//定义结果数组
+	var res []types.ScoredID
+	if request.MaxOutputNum==0||request.MaxOutputNum>numDocs {
+		res=make([]types.ScoredID,numDocs)
+	}else {
+		res=make([]types.ScoredID,request.MaxOutputNum)
+	}
+
+
+	h:=&types.NodeHeap{}
+	numshard:=len(rankOutputArr)
+	for i := 0; i < numshard; i++ {
+		if len(rankOutputArr[i])>0 {
+			node:=types.HeapNode{
+				ScoreObj:&rankOutputArr[i][0],
+				ShareNum:i,
+				IndexPointer:0,
+			}
+			heap.Push(h,node)
 		}
 	}
+
+	index:=0
+	for index >= len(res){
+		n:=heap.Pop(h)
+		if n==nil {
+			break
+		}
+		node:=n.(types.HeapNode)
+		res[index]=*node.ScoreObj
+		index++
+		if node.IndexPointer+1<len(rankOutputArr[node.ShareNum]) {
+			node.IndexPointer++
+			node.ScoreObj=&rankOutputArr[node.ShareNum][node.IndexPointer]
+			heap.Push(h,node)
+		}
+	}
+
 
 	// 准备输出
 	output.Tokens = tokens
 	// 仅当 CountDocsOnly 为 false 时才充填 output.Docs
 	if !request.CountDocsOnly {
-		if request.Orderless {
-			// 无序状态无需对 Offset 截断
-			output.Docs = rankOutput
-		} else {
-			rankOutLen := len(rankOutput)
-			start, end := maxRankOutput(rankOpts, rankOutLen)
-
-			output.Docs = rankOutput[start:end]
-		}
-	}
-
-	output.NumDocs = numDocs
-	output.Timeout = isTimeout
-
-	return
-}
-
-// Ranks rank docs by types.ScoredDocs
-func (engine *Engine) Ranks(request types.SearchReq, rankOpts types.RankOpts,
-	tokens []string, rankerReturnChan chan rankerReturnReq) (output types.SearchResp) {
-	// 从通信通道读取排序器的输出
-	numDocs := 0
-	rankOutput := types.ScoredDocs{}
-
-	//**********/ begin
-	timeout := request.Timeout
-	isTimeout := false
-	if timeout <= 0 {
-		// 不设置超时
-		rankOutArr, num := engine.NotTimeOut(request, rankerReturnChan)
-		rankOutput = rankOutArr.(types.ScoredDocs)
-		numDocs += num
-	} else {
-		// 设置超时
-		rankOutArr, num, timeout := engine.TimeOut(request, rankerReturnChan)
-		rankOutput = rankOutArr.(types.ScoredDocs)
-		numDocs += num
-		isTimeout = timeout
-	}
-
-	// 再排序
-	if !request.CountDocsOnly && !request.Orderless {
-		if rankOpts.ReverseOrder {
-			sort.Sort(sort.Reverse(rankOutput))
-		} else {
-			sort.Sort(rankOutput)
-		}
-	}
-
-	// 准备输出
-	output.Tokens = tokens
-	// 仅当 CountDocsOnly 为 false 时才充填 output.Docs
-	if !request.CountDocsOnly {
-		if request.Orderless {
-			// 无序状态无需对 Offset 截断
-			output.Docs = rankOutput
-		} else {
-			rankOutLen := len(rankOutput)
-			start, end := maxRankOutput(rankOpts, rankOutLen)
-
-			output.Docs = rankOutput[start:end]
-		}
+		output.Docs=res
 	}
 
 	output.NumDocs = numDocs
@@ -600,45 +509,34 @@ func (engine *Engine) Ranks(request types.SearchReq, rankOpts types.RankOpts,
 
 // SearchDoc find the document that satisfies the search criteria.
 // This function is thread safe, return not IDonly
-func (engine *Engine) SearchDoc(request types.SearchReq) (output types.SearchDoc) {
-	resp := engine.Search(request)
-	return types.SearchDoc{
-		BaseResp: resp.BaseResp,
-		Docs:     resp.Docs.(types.ScoredDocs),
-	}
-}
+//func (engine *Engine) SearchDoc(request types.SearchReq) (output types.SearchDoc) {
+//	resp := engine.Search(request)
+//	return types.SearchDoc{
+//		BaseResp: resp.BaseResp,
+//		Docs:     resp.Docs.(types.ScoredDocs),
+//	}
+//}
 
 // SearchID find the document that satisfies the search criteria.
 // This function is thread safe, return IDonly
-func (engine *Engine) SearchID(request types.SearchReq) (output types.SearchID) {
-	// return types.SearchID(engine.Search(request))
-	resp := engine.Search(request)
-	return types.SearchID{
-		BaseResp: resp.BaseResp,
-		Docs:     resp.Docs.(types.ScoredIDs),
-	}
-}
+//func (engine *Engine) SearchID(request types.SearchReq) (output types.SearchID) {
+//	// return types.SearchID(engine.Search(request))
+//	resp := engine.Search(request)
+//	return types.SearchID{
+//		BaseResp: resp.BaseResp,
+//		Docs:     resp.Docs.(types.ScoredIDs),
+//	}
+//}
 
 // Search find the document that satisfies the search criteria.
 // This function is thread safe
 // 查找满足搜索条件的文档，此函数线程安全
-func (engine *Engine) Search(request types.SearchReq) (output types.SearchResp) {
+func (engine *Engine) Search(request types.SearchReq) (output types.SearchID) {
 	if !engine.initialized {
 		log.Fatal("The engine must be initialized first.")
 	}
 
 	tokens := engine.Tokens(request)
-
-	var rankOpts types.RankOpts
-	if request.RankOpts == nil {
-		rankOpts = *engine.initOptions.DefRankOpts
-	} else {
-		rankOpts = *request.RankOpts
-	}
-
-	if rankOpts.ScoringCriteria == nil {
-		rankOpts.ScoringCriteria = engine.initOptions.DefRankOpts.ScoringCriteria
-	}
 
 	// 建立排序器返回的通信通道
 	rankerReturnChan := make(
@@ -650,10 +548,10 @@ func (engine *Engine) Search(request types.SearchReq) (output types.SearchResp) 
 		tokens:           tokens,
 		labels:           request.Labels,
 		docIds:           request.DocIds,
-		options:          rankOpts,
+		scoringCriteria:  request.ScoringCriteria,
+		filter:           request.Filter,
 		rankerReturnChan: rankerReturnChan,
 		orderless:        request.Orderless,
-		logic:            request.Logic,
 	}
 
 	// 向索引器发送查找请求
@@ -661,12 +559,10 @@ func (engine *Engine) Search(request types.SearchReq) (output types.SearchResp) 
 		engine.indexerLookupChans[shard] <- lookupRequest
 	}
 
-	if engine.initOptions.IDOnly {
-		output = engine.RankID(request, rankOpts, tokens, rankerReturnChan)
-		return
-	}
 
-	output = engine.Ranks(request, rankOpts, tokens, rankerReturnChan)
+	output = engine.RankID(request, tokens, rankerReturnChan)
+
+
 	return
 }
 

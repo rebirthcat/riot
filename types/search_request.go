@@ -29,17 +29,18 @@ type SearchReq struct {
 	// 但也属于搜索键的一种
 	Labels []string
 
-	// 类别
-	// Class string
-
-	// Logic 逻辑检索表达式
-	Logic Logic
 
 	// 当不为 nil 时，仅从这些 DocIds 包含的键中搜索（忽略值）
 	DocIds map[string]bool
 
-	// 排序选项
-	RankOpts *RankOpts
+	// 自定义评分接口
+	ScoringCriteria ScoringCriteria
+
+	//是否倒序排序
+	OrderReverse bool
+
+	//过滤选项
+	Filter   FilterCriteria
 
 	// 超时，单位毫秒（千分之一秒）。此值小于等于零时不设超时。
 	// 搜索超时的情况下仍有可能返回部分排序结果。
@@ -51,9 +52,13 @@ type SearchReq struct {
 	// 不排序，对于可在引擎外部（比如客户端）排序情况适用
 	// 对返回文档很多的情况打开此选项可以有效节省时间
 	Orderless bool
+
+	//Page *OutputPage
+	//指的是所有数组中最后一个元素的数组下标值，如果不设置默认输出所有
+	MaxOutputNum int
 }
 
-// RankOpts rank options
+//RankOpts rank options
 type RankOpts struct {
 	// 文档的评分规则，值为 nil 时使用 Engine 初始化时设定的规则
 	ScoringCriteria ScoringCriteria
@@ -69,31 +74,31 @@ type RankOpts struct {
 }
 
 // Logic logic options
-type Logic struct {
-	// return all doc
-	// All bool
-
-	// 与查询, 必须都存在
-	Must bool
-
-	// 或查询, 有一个存在即可
-	Should bool
-
-	// 非查询, 不包含
-	NotIn bool
-
-	Expr
-}
+//type Logic struct {
+//	// return all doc
+//	// All bool
+//
+//	// 与查询, 必须都存在
+//	Must bool
+//
+//	// 或查询, 有一个存在即可
+//	Should bool
+//
+//	// 非查询, 不包含
+//	NotIn bool
+//
+//	Expr
+//}
 
 // Expr logic expression options
-type Expr struct {
-
-	// 与查询, 必须都存在
-	Must []string
-
-	// 或查询, 有一个存在即可
-	Should []string
-
-	// 非查询, 不包含
-	NotIn []string
-}
+//type Expr struct {
+//
+//	// 与查询, 必须都存在
+//	Must []string
+//
+//	// 或查询, 有一个存在即可
+//	Should []string
+//
+//	// 非查询, 不包含
+//	NotIn []string
+//}

@@ -15,17 +15,9 @@
 
 package types
 
-// ScoringCriteria 评分规则通用接口
-type ScoringCriteria interface {
+// FilterCriteria 过滤规则通用接口
 
-	Score(doc ScoredID, fields interface{}) float32
+type FilterCriteria interface {
+	Filter(fields interface{}) bool
 }
 
-//// RankByBM25 一个简单的评分规则，文档分数为BM25
-//type RankByBM25 struct {
-//}
-//
-//// Score score
-//func (rule RankByBM25) Score(doc ScoredID, fields interface{}) float32 {
-//	return doc.Scores
-//}

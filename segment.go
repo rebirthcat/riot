@@ -285,6 +285,7 @@ func (engine *Engine) segmenterWorker() {
 				TokenLen: float32(numTokens),
 				Keywords: make([]types.KeywordIndex, len(tokensMap)),
 				Field:request.data.Fields,
+				FieldFilter:request.data.FieldsFilter,
 			},
 			forceUpdate: request.forceUpdate,
 		}

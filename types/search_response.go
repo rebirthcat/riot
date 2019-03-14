@@ -15,10 +15,6 @@
 
 package types
 
-import (
-	"github.com/rebirthcat/riot/utils"
-)
-
 // BaseResp search response options
 type BaseResp struct {
 	// 搜索用到的关键词
@@ -46,11 +42,11 @@ type SearchResp struct {
 }
 
 // SearchDoc search response options
-type SearchDoc struct {
-	BaseResp
-	// 搜索到的文档，已排序
-	Docs []ScoredDoc
-}
+//type SearchDoc struct {
+//	BaseResp
+//	// 搜索到的文档，已排序
+//	Docs []ScoredDoc
+//}
 
 // SearchID search response options
 type SearchID struct {
@@ -60,52 +56,52 @@ type SearchID struct {
 }
 
 // Content search content
-type Content struct {
-	// new Content
-	Content string
-
-	// new 属性 Attri
-	Attri interface{}
-
-	// new 返回评分字段
-	Fields interface{}
-}
+//type Content struct {
+//	// new Content
+//	Content string
+//
+//	// new 属性 Attri
+//	Attri interface{}
+//
+//	// new 返回评分字段
+//	Fields interface{}
+//}
 
 // ScoredDoc scored the document
-type ScoredDoc struct {
-	ScoredID
-
-	// new 返回文档 Content
-	Content string
-	// new 返回文档属性 Attri
-	Attri interface{}
-	// new 返回评分字段
-	Fields interface{}
-}
-
-// ScoredDocs 为了方便排序
-type ScoredDocs []ScoredDoc
-
-func (docs ScoredDocs) Len() int {
-	return len(docs)
-}
-
-func (docs ScoredDocs) Swap(i, j int) {
-	docs[i], docs[j] = docs[j], docs[i]
-}
-
-func (docs ScoredDocs) Less(i, j int) bool {
-	// 为了从大到小排序，这实际上实现的是 More 的功能
-	min := utils.MinInt(len(docs[i].Scores), len(docs[j].Scores))
-	for iScore := 0; iScore < min; iScore++ {
-		if docs[i].Scores[iScore] > docs[j].Scores[iScore] {
-			return true
-		} else if docs[i].Scores[iScore] < docs[j].Scores[iScore] {
-			return false
-		}
-	}
-	return len(docs[i].Scores) > len(docs[j].Scores)
-}
+//type ScoredDoc struct {
+//	ScoredID
+//
+//	// new 返回文档 Content
+//	Content string
+//	// new 返回文档属性 Attri
+//	Attri interface{}
+//	// new 返回评分字段
+//	Fields interface{}
+//}
+//
+//// ScoredDocs 为了方便排序
+//type ScoredDocs []ScoredDoc
+//
+//func (docs ScoredDocs) Len() int {
+//	return len(docs)
+//}
+//
+//func (docs ScoredDocs) Swap(i, j int) {
+//	docs[i], docs[j] = docs[j], docs[i]
+//}
+//
+//func (docs ScoredDocs) Less(i, j int) bool {
+//	// 为了从大到小排序，这实际上实现的是 More 的功能
+//	min := utils.MinInt(len(docs[i].Scores), len(docs[j].Scores))
+//	for iScore := 0; iScore < min; iScore++ {
+//		if docs[i].Scores[iScore] > docs[j].Scores[iScore] {
+//			return true
+//		} else if docs[i].Scores[iScore] < docs[j].Scores[iScore] {
+//			return false
+//		}
+//	}
+//	return len(docs[i].Scores) > len(docs[j].Scores)
+//}
 
 /*
   ______   .__   __.  __      ____    ____  __   _______
@@ -121,10 +117,15 @@ func (docs ScoredDocs) Less(i, j int) bool {
 type ScoredID struct {
 	DocId string
 
+	//BM25 float32
 	// 文档的打分值
-	// 搜索结果按照 Scores 的值排序，先按照第一个数排，
-	// 如果相同则按照第二个数排序，依次类推。
-	Scores []float32
+	Scores float32
+
+	// TokenProximity 关键词在文档中的紧邻距离，
+	// 紧邻距离的含义见 computeTokenProximity 的注释。
+	// 仅当索引类型为 LocsIndex 时返回有效值。
+	TokenProximity int32
+
 
 	// 用于生成摘要的关键词在文本中的字节位置，
 	// 该切片长度和 SearchResp.Tokens 的长度一样
@@ -148,14 +149,51 @@ func (docs ScoredIDs) Swap(i, j int) {
 }
 
 func (docs ScoredIDs) Less(i, j int) bool {
-	// 为了从大到小排序，这实际上实现的是 More 的功能
-	min := utils.MinInt(len(docs[i].Scores), len(docs[j].Scores))
-	for iScore := 0; iScore < min; iScore++ {
-		if docs[i].Scores[iScore] > docs[j].Scores[iScore] {
-			return true
-		} else if docs[i].Scores[iScore] < docs[j].Scores[iScore] {
-			return false
-		}
-	}
-	return len(docs[i].Scores) > len(docs[j].Scores)
+
+	return docs[i].Scores > docs[j].Scores
 }
+
+type HeapNode struct {
+	ScoreObj *ScoredID
+	ShareNum int
+	IndexPointer int
+}
+
+type NodeHeap []HeapNode
+
+func (h NodeHeap) Len() int {
+	return len(h)
+}
+
+func (h NodeHeap) Swap(i, j int) {
+	h[i],h[j]=h[j],h[i]
+}
+
+func (h NodeHeap)Less(i,j int) bool {
+	return h[i].ScoreObj.Scores>h[j].ScoreObj.Scores
+}
+
+func (h *NodeHeap) Push(x interface{}) {
+	*h=append(*h,x.(HeapNode))
+}
+
+func (h *NodeHeap)Pop()interface{}  {
+	old:=*h
+	n:=len(old)
+	if n == 0 {
+		return nil
+	}
+	x:=old[n-1]
+	*h=old[0:n-1]
+	return x
+}
+
+type OutputPage struct {
+	PageSize int
+	PageNum   int
+}
+
+
+
+
+

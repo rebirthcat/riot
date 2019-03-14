@@ -27,11 +27,9 @@ var (
 	defaultNumShards         = 8
 	defaultIndexerBufLen     = runtime.NumCPU()
 	defaultNumIndexerThreads = runtime.NumCPU()
-	defaultRankerBufLen      = runtime.NumCPU()
+	//defaultRankerBufLen      = runtime.NumCPU()
 	defaultNumRankerThreads  = runtime.NumCPU()
-	defaultRankOpts          = RankOpts{
-		ScoringCriteria: RankByBM25{},
-	}
+
 	defaultIndexerOpts = IndexerOpts{
 		IndexType:      FrequenciesIndex,
 		DocCacheSize:defaultDocCacheSize,
@@ -88,7 +86,7 @@ type EngineOpts struct {
 	NumIndexerThreads int
 
 	// 排序器的信道缓冲长度
-	RankerBufLen int
+	//RankerBufLen int
 	////排序器持久化信道的缓冲长度
 	//StoreRankerBufLen int
 
@@ -99,7 +97,7 @@ type EngineOpts struct {
 	IndexerOpts *IndexerOpts
 
 	// 默认的搜索选项
-	DefRankOpts *RankOpts
+	//DefRankOpts *RankOpts
 
 	// 是否使用持久数据库，以及数据库文件保存的目录和裂分数目
 	StoreOnly bool `toml:"store_only"`
@@ -109,7 +107,7 @@ type EngineOpts struct {
 	StoreShards int    `toml:"store_shards"`
 	StoreEngine string `toml:"store_engine"`
 
-	IDOnly bool `toml:"id_only"`
+	//IDOnly bool `toml:"id_only"`
 	//第一次启动时预估文档数量和索引关键词数量，恢复启动时自动从文件中读出准确数量
 	DocNumber uint64
 	TokenNumber uint64
@@ -138,9 +136,9 @@ func (options *EngineOpts) Init() {
 		options.NumIndexerThreads = defaultNumIndexerThreads
 	}
 
-	if options.RankerBufLen == 0 {
-		options.RankerBufLen = defaultRankerBufLen
-	}
+	//if options.RankerBufLen == 0 {
+	//	options.RankerBufLen = defaultRankerBufLen
+	//}
 
 	if options.NumRankerThreads == 0 {
 		options.NumRankerThreads = defaultNumRankerThreads
@@ -162,13 +160,13 @@ func (options *EngineOpts) Init() {
 		options.IndexerOpts.IndexType=FrequenciesIndex
 	}
 
-	if options.DefRankOpts == nil {
-		options.DefRankOpts = &defaultRankOpts
-	}
-
-	if options.DefRankOpts.ScoringCriteria == nil {
-		options.DefRankOpts.ScoringCriteria = defaultRankOpts.ScoringCriteria
-	}
+	//if options.DefRankOpts == nil {
+	//	options.DefRankOpts = &defaultRankOpts
+	//}
+	//
+	//if options.DefRankOpts.ScoringCriteria == nil {
+	//	options.DefRankOpts.ScoringCriteria = defaultRankOpts.ScoringCriteria
+	//}
 
 	if options.StoreShards == 0 {
 		options.StoreShards = defaultStoreShards

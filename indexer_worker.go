@@ -30,10 +30,11 @@ type indexerLookupReq struct {
 	labels        []string
 
 	docIds           map[string]bool
-	options          types.RankOpts
+	orderReverse     bool
+	scoringCriteria  types.ScoringCriteria
+	filter    		 types.FilterCriteria
 	rankerReturnChan chan rankerReturnReq
 	orderless        bool
-	logic            types.Logic
 }
 
 type indexerRemoveDocReq struct {
@@ -63,8 +64,6 @@ func (engine *Engine) indexerRemoveDoc(shard int) {
 
 func (engine *Engine) orderLess(
 	request indexerLookupReq, docs []types.IndexedDoc) {
-
-	if engine.initOptions.IDOnly {
 		var outputDocs types.ScoredIDs
 		for _, d := range docs {
 			outputDocs = append(outputDocs, types.ScoredID{
@@ -78,27 +77,8 @@ func (engine *Engine) orderLess(
 			docs:    outputDocs,
 			numDocs: len(outputDocs),
 		}
-
 		return
-	}
 
-	var outputDocs types.ScoredDocs
-	for _, d := range docs {
-		ids := types.ScoredID{
-			DocId:            d.DocId,
-			TokenSnippetLocs: d.TokenSnippetLocs,
-			TokenLocs:        d.TokenLocs,
-		}
-
-		outputDocs = append(outputDocs, types.ScoredDoc{
-			ScoredID: ids,
-		})
-	}
-
-	request.rankerReturnChan <- rankerReturnReq{
-		docs:    outputDocs,
-		numDocs: len(outputDocs),
-	}
 }
 
 func (engine *Engine) indexerLookup(shard int) {
@@ -107,31 +87,10 @@ func (engine *Engine) indexerLookup(shard int) {
 
 		docs, numDocs := engine.indexers[shard].Lookup(
 			request.tokens, request.labels,
-			request.docIds, request.countDocsOnly, request.logic)
+			request.docIds, request.countDocsOnly, request.scoringCriteria,request.filter,request.orderReverse)
 
-		if request.countDocsOnly {
-			request.rankerReturnChan <- rankerReturnReq{numDocs: numDocs}
-			continue
-		}
+		request.rankerReturnChan <- rankerReturnReq{
+					docs: docs, numDocs: numDocs}
 
-		if len(docs) == 0 {
-			request.rankerReturnChan <- rankerReturnReq{}
-			continue
-		}
-
-		if request.orderless {
-			// var outputDocs interface{}
-			engine.orderLess(request, docs)
-
-			continue
-		}
-
-		rankerRequest := rankerRankReq{
-			countDocsOnly:    request.countDocsOnly,
-			docs:             docs,
-			options:          request.options,
-			rankerReturnChan: request.rankerReturnChan,
-		}
-		engine.rankerRankChans[shard] <- rankerRequest
 	}
 }

@@ -64,8 +64,19 @@ type Indexer struct {
 		removeCachePointer int
 		removeCache        types.DocsId
 	}
-	//d
-	ranker *Ranker
+	//排序字段
+	rankerLock struct {
+		sync.RWMutex
+		fields map[string]interface{}
+		//docs   map[string]bool
+	}
+	//过滤字段
+	filterLock struct{
+		sync.RWMutex
+		fields map[string]interface{}
+	}
+
+
 	initOptions types.IndexerOpts
 	initialized bool
 
@@ -82,11 +93,6 @@ type Indexer struct {
 	storeUpdateReverseIndexChan    chan StoreReverseIndexReq
 	//表示保存在持久化文件中的文档树量(因为该值只做统计使用，不参与搜索的bm25的计算，所以不适合放到tableLock里)
 	numDocsStore	uint64
-
-	//storeUpdateForwardIndexFinsh bool
-	//
-	//storeUpdateReverseIndexFinsh bool
-
 }
 
 // KeywordIndices 反向索引表的一行，收集了一个搜索键出现的所有文档，按照DocId从小到大排序。
@@ -129,7 +135,7 @@ func (indexer *Indexer)GetNumTotalTokenLen()uint64  {
 
 
 // Init 初始化索引器
-func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.IndexerOpts,ranker *Ranker) {
+func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.IndexerOpts) {
 	if indexer.initialized == true {
 		log.Fatal("The Indexer can not be initialized twice.")
 	}
@@ -145,7 +151,11 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.Indexe
 	indexer.removeCacheLock.removeCache = make(
 		[]string, indexer.initOptions.DocCacheSize*2)
 	indexer.tableLock.docTokenLens = make(map[string]float32)
-	indexer.ranker=ranker
+
+	//初始化该索引器里对应的排序所用的字段
+	indexer.rankerLock.fields=make(map[string]interface{})
+	//indexer.rankerLock.docs=make(map[string]bool)
+
 	indexer.storeUpdateForwardIndexChan=make(chan StoreForwardIndexReq,StoreChanBufLen)
 	indexer.storeUpdateReverseIndexChan=make(chan StoreReverseIndexReq,StoreChanBufLen)
 	indexer.shardNumber=shard
@@ -263,24 +273,29 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			continue
 		}
 
-		// 更新文档关键词总长度
-		var timer *time.Timer
-		indexer.ranker.lock.Lock()
-		indexer.ranker.lock.docs[doc.DocId] = true
-		indexer.ranker.lock.fields[doc.DocId] = doc.Field
-		indexer.ranker.lock.Unlock()
+		//更新排序字段
+		indexer.rankerLock.Lock()
+		indexer.rankerLock.fields[doc.DocId] = doc.Field
+		indexer.rankerLock.Unlock()
+		//更新过滤字段
+		indexer.filterLock.Lock()
+		indexer.filterLock.fields[doc.DocId]=doc.FieldFilter
+		indexer.filterLock.Unlock()
+
 
 		storeforwardreq:=StoreForwardIndexReq{
 			DocID:doc.DocId,
 			Remove:false,
 			Field:doc.Field,
+			FieldFilter:doc.FieldFilter,
 		}
-
+		// 更新文档关键词总长度
 		if indexer.initOptions.IndexType!=types.DocIdsIndex {
 			indexer.tableLock.docTokenLens[doc.DocId] = float32(doc.TokenLen)
 			indexer.tableLock.totalTokenLen += doc.TokenLen
 			storeforwardreq.DocTokenLen=doc.TokenLen
 		}
+		var timer *time.Timer
 		timer = time.NewTimer(time.Millisecond * 100)
 		select {
 		case indexer.storeUpdateForwardIndexChan <- storeforwardreq:
@@ -414,16 +429,18 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 	var timer *time.Timer
 	for _, docId := range *docs {
 
-		indexer.ranker.lock.Lock()
-		delete(indexer.ranker.lock.docs,docId)
-		delete(indexer.ranker.lock.fields,docId)
-		indexer.ranker.lock.Unlock()
+		indexer.rankerLock.Lock()
+		delete(indexer.rankerLock.fields,docId)
+		indexer.rankerLock.Unlock()
+
+		indexer.filterLock.Lock()
+		delete(indexer.filterLock.fields,docId)
+		indexer.filterLock.Unlock()
 
 		if indexer.initOptions.IndexType!=types.DocIdsIndex {
 			indexer.tableLock.totalTokenLen -= indexer.tableLock.docTokenLens[docId]
 			delete(indexer.tableLock.docTokenLens, docId)
 		}
-		//delete(indexer.tableLock.docTokenLens, docId)
 		delete(indexer.tableLock.docsState, docId)
 		storeforwardreq:=StoreForwardIndexReq{
 			DocID:docId,
@@ -521,8 +538,8 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 // 当 docIds 不为 nil 时仅从 docIds 指定的文档中查找
 //a
 func (indexer *Indexer) Lookup(
-	tokens, labels []string, docIds map[string]bool, countDocsOnly bool,
-	logic ...types.Logic) (docs []types.IndexedDoc, numDocs int) {
+	tokens, labels []string, docIds map[string]bool, countDocsOnly bool, scoringCriteria  types.ScoringCriteria,
+	filter types.FilterCriteria,orderReverse bool) (scoredIDs []types.ScoredID, numDocs int) {
 
 	if indexer.initialized == false {
 		log.Fatal("The Indexer has not been initialized.")
@@ -540,35 +557,14 @@ func (indexer *Indexer) Lookup(
 	copy(keywords, tokens)
 	copy(keywords[len(tokens):], labels)
 
-	if len(logic) > 0 {
-		loc := logic[0].Must == true ||
-			logic[0].Should == true || logic[0].NotIn == true
-
-		if logic != nil && len(keywords) > 0 && loc {
-			docs, numDocs = indexer.LogicLookup(
-				docIds, countDocsOnly, keywords, logic[0])
-
-			return
-		}
-
-		expr := len(logic[0].Expr.Must) > 0 ||
-			len(logic[0].Expr.Should) > 0
-		not := len(logic[0].Expr.NotIn) >= 0
-
-		if logic != nil && expr && not {
-			docs, numDocs = indexer.LogicLookup(
-				docIds, countDocsOnly, keywords, logic[0])
-
-			return
-		}
-	}
-
-	return indexer.internalLookup(keywords, tokens, docIds, countDocsOnly)
+	docs,numDocs:=indexer.internalLookup(keywords, tokens, docIds, countDocsOnly,scoringCriteria,filter,orderReverse)
+	scoredIDs=[]types.ScoredID(docs)
+	return
 }
 //a
 func (indexer *Indexer) internalLookup(
-	keywords, tokens []string, docIds map[string]bool, countDocsOnly bool) (
-	docs []types.IndexedDoc, numDocs int) {
+	keywords, tokens []string, docIds map[string]bool, countDocsOnly bool,scoringCriteria types.ScoringCriteria,
+	filter types.FilterCriteria,orderReverse bool) (docs types.ScoredIDs, numDocs int) {
 
 	table := make([]*KeywordIndices, len(keywords))
 	for i, keyword := range keywords {
@@ -635,8 +631,17 @@ func (indexer *Indexer) internalLookup(
 			if !ok || docState != 0 {
 				continue
 			}
-			indexedDoc := types.IndexedDoc{}
+			if filter!=nil {
+				indexer.filterLock.RLock()
+				filterfield:=indexer.filterLock.fields[baseDocId]
+				indexer.filterLock.RUnlock()
+				if !filter.Filter(filterfield) {
+					continue
+				}
+			}
 
+			//indexedDoc := types.IndexedDoc{}
+			indexedDoc := types.ScoredID{}
 			// 当为 LocsIndex 时计算关键词紧邻距离
 			if indexer.initOptions.IndexType == types.LocsIndex {
 				// 计算有多少关键词是带有距离信息的
@@ -648,7 +653,7 @@ func (indexer *Indexer) internalLookup(
 				}
 				if numTokensWithLocations != len(tokens) {
 					if !countDocsOnly {
-						docs = append(docs, types.IndexedDoc{
+						docs = append(docs, types.ScoredID{
 							DocId: baseDocId,
 						})
 					}
@@ -673,9 +678,9 @@ func (indexer *Indexer) internalLookup(
 			}
 
 			// 当为 LocsIndex 或者 FrequenciesIndex 时计算BM25
+			bm25 := float32(0)
 			if indexer.initOptions.IndexType == types.LocsIndex ||
 				indexer.initOptions.IndexType == types.FrequenciesIndex {
-				bm25 := float32(0)
 				d := indexer.tableLock.docTokenLens[baseDocId]
 				for i, t := range table[:len(tokens)] {
 					var frequency float32
@@ -695,10 +700,27 @@ func (indexer *Indexer) internalLookup(
 						bm25 += idf * frequency * (k1 + 1) / (frequency + k1*(1-b+b*d/avgDocLength))
 					}
 				}
-				indexedDoc.BM25 = float32(bm25)
 			}
 
 			indexedDoc.DocId = baseDocId
+			//对搜索到的文档进行打分
+			if scoringCriteria==nil {
+				//默认打分为bm25
+				indexedDoc.Scores = float32(bm25)
+			}else {
+				//用户自定义评分规则，分钟小于0则剔除
+				indexer.rankerLock.RLock()
+				fs,ok:=indexer.rankerLock.fields[indexedDoc.DocId]
+				indexer.rankerLock.RUnlock()
+				if ok {
+					scores:=scoringCriteria.Score(indexedDoc,fs)
+					if scores<0 {
+						continue
+					}
+					indexedDoc.Scores=scores
+				}
+			}
+
 			if !countDocsOnly {
 				docs = append(docs, indexedDoc)
 			}
@@ -706,134 +728,12 @@ func (indexer *Indexer) internalLookup(
 		}
 	}
 
-	return
-}
-
-// LogicLookup logic Lookup
-//a
-func (indexer *Indexer) LogicLookup(
-	docIds map[string]bool, countDocsOnly bool, logicExpr []string,
-	logic types.Logic) (docs []types.IndexedDoc, numDocs int) {
-
-	// // 有效性检查, 不允许只出现逻辑非检索, 也不允许与或非都不存在
-	// if Logic.Must == true && Logic.Should == true && Logic.NotIn == true {
-	// 	return
-	// }
-
-	// mustTable 中的搜索键检查
-	// 如果存在与搜索键, 则要求所有的与搜索键都有对应的反向表
-	mustTable := make([]*KeywordIndices, 0)
-
-	if len(logic.Expr.Must) > 0 {
-		logicExpr = logic.Expr.Must
+	//排序
+	if orderReverse {
+		sort.Sort(sort.Reverse(docs))
+	}else {
+		sort.Sort(docs)
 	}
-	if logic.Must == true || len(logic.Expr.Must) > 0 {
-		for _, keyword := range logicExpr {
-			indices, found := indexer.tableLock.table[keyword]
-			if !found {
-				return
-			}
-
-			mustTable = append(mustTable, indices)
-		}
-	}
-
-	// 逻辑或搜索键检查
-	// 1. 如果存在逻辑或搜索键, 则至少有一个存在反向表
-	// 2. 逻辑或和逻辑与之间是与关系
-	shouldTable := make([]*KeywordIndices, 0)
-
-	if len(logic.Expr.Should) > 0 {
-		logicExpr = logic.Expr.Should
-	}
-
-	if logic.Should == true || len(logic.Expr.Should) > 0 {
-		for _, keyword := range logicExpr {
-			indices, found := indexer.tableLock.table[keyword]
-			if found {
-				shouldTable = append(shouldTable, indices)
-			}
-		}
-		if len(shouldTable) == 0 {
-			// 如果存在逻辑或搜索键， 但是对应的反向表全部为空， 则返回
-			return
-		}
-	}
-
-	// 逻辑非中的搜索键检查
-	// 可以不存在逻辑非搜索（NotInTable为空), 允许逻辑非搜索键对应的反向表为空
-	notInTable := make([]*KeywordIndices, 0)
-
-	if len(logic.Expr.NotIn) > 0 {
-		logicExpr = logic.Expr.NotIn
-	}
-	if logic.NotIn == true || len(logic.Expr.NotIn) > 0 {
-		for _, keyword := range logicExpr {
-			indices, found := indexer.tableLock.table[keyword]
-			if found {
-				notInTable = append(notInTable, indices)
-			}
-		}
-	}
-
-	// 开始检索
-	numDocs = 0
-	if logic.Must == true || len(logic.Expr.Must) > 0 {
-		// 如果存在逻辑与检索
-		for idx := indexer.getIndexLen(mustTable[0]) - 1; idx >= 0; idx-- {
-			baseDocId := indexer.getDocId(mustTable[0], idx)
-			if docIds != nil {
-				_, found := docIds[baseDocId]
-				if !found {
-					continue
-				}
-			}
-
-			mustFound := indexer.findInMustTable(mustTable[1:], baseDocId)
-			shouldFound := indexer.findInShouldTable(shouldTable, baseDocId)
-			notInFound := indexer.findInNotInTable(notInTable, baseDocId)
-
-			if mustFound && shouldFound && !notInFound {
-				indexedDoc := types.IndexedDoc{}
-				indexedDoc.DocId = baseDocId
-				if !countDocsOnly {
-					docs = append(docs, indexedDoc)
-				}
-				numDocs++
-			}
-		}
-
-		return
-	}
-
-	// 不存在逻辑与检索, 则必须存在逻辑或检索
-	// 这时进行求并集操作
-	if logic.Should == true || len(logic.Expr.Should) > 0 {
-		docs, numDocs = indexer.unionTable(shouldTable, notInTable, countDocsOnly)
-	} else {
-		uintDocIds := make([]string, 0)
-		// 当前直接返回 Not 逻辑数据
-		for i := 0; i < len(notInTable); i++ {
-			for _, docid := range notInTable[i].docIds {
-				if indexer.findInNotInTable(notInTable, docid) {
-					uintDocIds = append(uintDocIds, docid)
-				}
-			}
-		}
-
-		// StableDesc(uintDocIds)
-
-		numDocs = 0
-		for _, doc := range uintDocIds {
-			indexedDoc := types.IndexedDoc{}
-			indexedDoc.DocId = doc
-			if !countDocsOnly {
-				docs = append(docs, indexedDoc)
-			}
-			numDocs++
-		}
-	}
-
 	return
 }
 

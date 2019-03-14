@@ -20,6 +20,7 @@ Package types is riot types
 package types
 
 // DocIndex document's index
+//使用分词器将用户传入的数据处理得到的即将传入索引器索引的结构
 type DocIndex struct {
 	// DocId 文本的 DocId
 	DocId string
@@ -31,6 +32,8 @@ type DocIndex struct {
 	Keywords []KeywordIndex
 
 	Field  interface{}
+
+	FieldFilter interface{}
 }
 
 // KeywordIndex 反向索引项，这实际上标注了一个（搜索键，文档）对。
@@ -66,6 +69,20 @@ type IndexedDoc struct {
 	// TokenLocs 关键词在文本中的具体位置。
 	// 仅当索引类型为 LocsIndex 时返回有效值。
 	TokenLocs [][]int
+}
+
+type IndexedDocs []IndexedDoc
+
+func (indexeddocs IndexedDocs)Len() int {
+	return len(indexeddocs)
+}
+
+func (indexddocs IndexedDocs)Swap(i,j int)  {
+	indexddocs[i],indexddocs[j]=indexddocs[j],indexddocs[i]
+}
+
+func (indexddocs IndexedDocs)Less(i,j int)bool  {
+	return indexddocs[i].BM25 > indexddocs[j].BM25
 }
 
 // DocsIndex 方便批量加入文档索引

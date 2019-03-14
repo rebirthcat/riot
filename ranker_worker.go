@@ -15,9 +15,7 @@
 
 package riot
 
-import (
-	"github.com/rebirthcat/riot/types"
-)
+import "github.com/rebirthcat/riot/types"
 
 type rankerAddDocReq struct {
 	docId  string
@@ -37,7 +35,7 @@ type rankerRankReq struct {
 
 type rankerReturnReq struct {
 	// docs    types.ScoredDocs
-	docs    interface{}
+	docs    []types.ScoredID
 	numDocs int
 }
 
@@ -57,20 +55,20 @@ type rankerRemoveDocReq struct {
 //	}
 //}
 
-func (engine *Engine) rankerRank(shard int) {
-	for {
-		request := <-engine.rankerRankChans[shard]
-		if request.options.MaxOutputs != 0 {
-			request.options.MaxOutputs += request.options.OutputOffset
-		}
-		request.options.OutputOffset = 0
-		outputDocs, numDocs := engine.rankers[shard].Rank(request.docs,
-			request.options, request.countDocsOnly)
-
-		request.rankerReturnChan <- rankerReturnReq{
-			docs: outputDocs, numDocs: numDocs}
-	}
-}
+//func (engine *Engine) rankerRank(shard int) {
+//	for {
+//		request := <-engine.rankerRankChans[shard]
+//		if request.options.MaxOutputs != 0 {
+//			request.options.MaxOutputs += request.options.OutputOffset
+//		}
+//		request.options.OutputOffset = 0
+//		outputDocs, numDocs := engine.rankers[shard].Rank(request.docs,
+//			request.options, request.countDocsOnly)
+//
+//		request.rankerReturnChan <- rankerReturnReq{
+//			docs: outputDocs, numDocs: numDocs}
+//	}
+//}
 
 //func (engine *Engine) rankerRemoveDoc(shard int) {
 //	for {
