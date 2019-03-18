@@ -172,7 +172,7 @@ func (h NodeHeap) Swap(i, j int) {
 }
 
 func (h NodeHeap)Less(i,j int) bool {
-	return h[i].ScoreObj.Scores>h[j].ScoreObj.Scores
+	return h[i].ScoreObj.Scores<h[j].ScoreObj.Scores
 }
 
 func (h *NodeHeap) Push(x interface{}) {
