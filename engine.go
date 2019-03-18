@@ -483,8 +483,9 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 		}
 	}
 	log.Println(h)
-
+	log.Println("=============")
 	index:=0
+	fmt.Println(len(res))
 	for index >= len(res){
 		n:=heap.Pop(h)
 		if n==nil {
