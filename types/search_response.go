@@ -161,32 +161,41 @@ type HeapNode struct {
 	IndexPointer int
 }
 
-type NodeHeap []HeapNode
+type NodeHeap struct {
+	Arr []HeapNode
+	IsSmallTop bool
+}
+
 
 func (h NodeHeap) Len() int {
-	return len(h)
+	return len(h.Arr)
 }
 
 func (h NodeHeap) Swap(i, j int) {
-	h[i],h[j]=h[j],h[i]
+	h.Arr[i],h.Arr[j]=h.Arr[j],h.Arr[i]
 }
 
 func (h NodeHeap)Less(i,j int) bool {
-	return h[i].ScoreObj.Scores<h[j].ScoreObj.Scores
+	if h.IsSmallTop {
+		return h.Arr[i].ScoreObj.Scores<h.Arr[j].ScoreObj.Scores
+	}else {
+		return h.Arr[i].ScoreObj.Scores>h.Arr[j].ScoreObj.Scores
+	}
+
 }
 
 func (h *NodeHeap) Push(x interface{}) {
-	*h=append(*h,x.(HeapNode))
+	h.Arr=append(h.Arr,x.(HeapNode))
 }
 
 func (h *NodeHeap)Pop()interface{}  {
-	old:=*h
+	old:=h.Arr
 	n:=len(old)
 	if n == 0 {
 		return nil
 	}
 	x:=old[n-1]
-	*h=old[0:n-1]
+	h.Arr=old[0:n-1]
 	return x
 }
 

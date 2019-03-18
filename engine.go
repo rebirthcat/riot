@@ -470,7 +470,10 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 	}
 
 
-	h:=&types.NodeHeap{}
+	h:=&types.NodeHeap{
+		Arr:[]types.HeapNode{},
+		IsSmallTop:request.OrderReverse,
+	}
 	numshard:=len(rankOutputArr)
 	for i := 0; i < numshard; i++ {
 		if len(rankOutputArr[i])>0 {
