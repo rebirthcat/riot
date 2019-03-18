@@ -138,7 +138,7 @@ type ScoredID struct {
 }
 
 // ScoredIDs 为了方便排序
-type ScoredIDs []ScoredID
+type ScoredIDs []*ScoredID
 
 func (docs ScoredIDs) Len() int {
 	return len(docs)

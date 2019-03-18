@@ -539,7 +539,7 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 //a
 func (indexer *Indexer) Lookup(
 	tokens, labels []string, docIds map[string]bool, countDocsOnly bool, scoringCriteria  types.ScoringCriteria,
-	filter types.FilterCriteria,orderReverse bool) (scoredIDs []types.ScoredID, numDocs int) {
+	filter types.FilterCriteria,orderReverse bool) (scoredIDs []*types.ScoredID, numDocs int) {
 
 	if indexer.initialized == false {
 		log.Fatal("The Indexer has not been initialized.")
@@ -557,14 +557,14 @@ func (indexer *Indexer) Lookup(
 	copy(keywords, tokens)
 	copy(keywords[len(tokens):], labels)
 
-	docs,numDocs:=indexer.internalLookup(keywords, tokens, docIds, countDocsOnly,scoringCriteria,filter,orderReverse)
-	scoredIDs=[]types.ScoredID(docs)
+	scoredIDs,numDocs=indexer.internalLookup(keywords, tokens, docIds, countDocsOnly,scoringCriteria,filter,orderReverse)
+	//scoredIDs=[]*types.ScoredID(docs)
 	return
 }
 //a
 func (indexer *Indexer) internalLookup(
 	keywords, tokens []string, docIds map[string]bool, countDocsOnly bool,scoringCriteria types.ScoringCriteria,
-	filter types.FilterCriteria,orderReverse bool) (docs types.ScoredIDs, numDocs int) {
+	filter types.FilterCriteria,orderReverse bool) (docs []*types.ScoredID, numDocs int) {
 
 	table := make([]*KeywordIndices, len(keywords))
 	for i, keyword := range keywords {
@@ -641,7 +641,8 @@ func (indexer *Indexer) internalLookup(
 			}
 
 			//indexedDoc := types.IndexedDoc{}
-			indexedDoc := types.ScoredID{}
+			indexedDoc := &types.ScoredID{}
+			indexedDoc.DocId = baseDocId
 			// 当为 LocsIndex 时计算关键词紧邻距离
 			if indexer.initOptions.IndexType == types.LocsIndex {
 				// 计算有多少关键词是带有距离信息的
@@ -653,7 +654,7 @@ func (indexer *Indexer) internalLookup(
 				}
 				if numTokensWithLocations != len(tokens) {
 					if !countDocsOnly {
-						docs = append(docs, types.ScoredID{
+						docs = append(docs, &types.ScoredID{
 							DocId: baseDocId,
 						})
 					}
@@ -677,43 +678,41 @@ func (indexer *Indexer) internalLookup(
 				}
 			}
 
-			// 当为 LocsIndex 或者 FrequenciesIndex 时计算BM25
-			bm25 := float32(0)
-			if indexer.initOptions.IndexType == types.LocsIndex ||
-				indexer.initOptions.IndexType == types.FrequenciesIndex {
-				d := indexer.tableLock.docTokenLens[baseDocId]
-				for i, t := range table[:len(tokens)] {
-					var frequency float32
-					if indexer.initOptions.IndexType == types.LocsIndex {
-						frequency = float32(len(t.locations[indexPointers[i]]))
-					} else {
-						frequency = t.frequencies[indexPointers[i]]
-					}
-
-					// 计算 BM25
-					if len(t.docIds) > 0 && frequency > 0 &&
-						indexer.initOptions.BM25Parameters != nil && avgDocLength != 0 {
-						// 带平滑的 idf
-						idf := float32(math.Log2(float64(indexer.tableLock.numDocs)/float64(len(t.docIds)) + 1))
-						k1 := indexer.initOptions.BM25Parameters.K1
-						b := indexer.initOptions.BM25Parameters.B
-						bm25 += idf * frequency * (k1 + 1) / (frequency + k1*(1-b+b*d/avgDocLength))
-					}
-				}
-			}
-
-			indexedDoc.DocId = baseDocId
 			//对搜索到的文档进行打分
 			if scoringCriteria==nil {
 				//默认打分为bm25
+				// 当为 LocsIndex 或者 FrequenciesIndex 时计算BM25
+				bm25 := float32(0)
+				if indexer.initOptions.IndexType == types.LocsIndex ||
+					indexer.initOptions.IndexType == types.FrequenciesIndex {
+					d := indexer.tableLock.docTokenLens[baseDocId]
+					for i, t := range table[:len(tokens)] {
+						var frequency float32
+						if indexer.initOptions.IndexType == types.LocsIndex {
+							frequency = float32(len(t.locations[indexPointers[i]]))
+						} else {
+							frequency = t.frequencies[indexPointers[i]]
+						}
+
+						// 计算 BM25
+						if len(t.docIds) > 0 && frequency > 0 &&
+							indexer.initOptions.BM25Parameters != nil && avgDocLength != 0 {
+							// 带平滑的 idf
+							idf := float32(math.Log2(float64(indexer.tableLock.numDocs)/float64(len(t.docIds)) + 1))
+							k1 := indexer.initOptions.BM25Parameters.K1
+							b := indexer.initOptions.BM25Parameters.B
+							bm25 += idf * frequency * (k1 + 1) / (frequency + k1*(1-b+b*d/avgDocLength))
+						}
+					}
+				}
 				indexedDoc.Scores = float32(bm25)
 			}else {
-				//用户自定义评分规则，分钟小于0则剔除
+				//用户自定义评分规则，分数小于0则剔除
 				indexer.rankerLock.RLock()
 				fs,ok:=indexer.rankerLock.fields[indexedDoc.DocId]
 				indexer.rankerLock.RUnlock()
 				if ok {
-					scores:=scoringCriteria.Score(indexedDoc,fs)
+					scores:=scoringCriteria.Score(fs)
 					if scores<0 {
 						continue
 					}
@@ -730,9 +729,9 @@ func (indexer *Indexer) internalLookup(
 
 	//排序
 	if orderReverse {
-		sort.Sort(sort.Reverse(docs))
+		sort.Sort(sort.Reverse(types.ScoredIDs(docs)))
 	}else {
-		sort.Sort(docs)
+		sort.Sort(types.ScoredIDs(docs))
 	}
 	return
 }

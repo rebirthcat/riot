@@ -66,7 +66,7 @@ func (engine *Engine) orderLess(
 	request indexerLookupReq, docs []types.IndexedDoc) {
 		var outputDocs types.ScoredIDs
 		for _, d := range docs {
-			outputDocs = append(outputDocs, types.ScoredID{
+			outputDocs = append(outputDocs, &types.ScoredID{
 				DocId:            d.DocId,
 				TokenSnippetLocs: d.TokenSnippetLocs,
 				TokenLocs:        d.TokenLocs,

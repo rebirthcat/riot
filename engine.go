@@ -394,7 +394,7 @@ func maxRankOutput(rankOpts types.RankOpts, rankLen int) (int, int) {
 
 // NotTimeOut not set engine timeout
 func (engine *Engine) NotTimeOut(request types.SearchReq, rankerReturnChan chan rankerReturnReq) (
-	rankOutID []types.ScoredIDs, numDocs int) {
+	rankOutID [][]*types.ScoredID, numDocs int) {
 
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		rankerOutput := <-rankerReturnChan
@@ -412,7 +412,7 @@ func (engine *Engine) NotTimeOut(request types.SearchReq, rankerReturnChan chan 
 // TimeOut set engine timeout
 func (engine *Engine) TimeOut(request types.SearchReq,
 	rankerReturnChan chan rankerReturnReq) (
-	rankOutID  []types.ScoredIDs, numDocs int, isTimeout bool) {
+	rankOutID  [][]*types.ScoredID, numDocs int, isTimeout bool) {
 
 	deadline := time.Now().Add(time.Nanosecond *
 		time.Duration(NumNanosecondsInAMillisecond*request.Timeout))
@@ -439,7 +439,7 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 	output types.SearchID) {
 	// 从通信通道读取排序器的输出
 	numDocs := 0
-	rankOutputArr := []types.ScoredIDs{}
+	rankOutputArr := [][]*types.ScoredID{}
 
 	//**********/ begin
 	timeout := request.Timeout
@@ -469,7 +469,7 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 	for i := 0; i < numshard; i++ {
 		if len(rankOutputArr[i])>0 {
 			node:=types.HeapNode{
-				ScoreObj:&rankOutputArr[i][0],
+				ScoreObj:rankOutputArr[i][0],
 				ShareNum:i,
 				IndexPointer:0,
 			}
@@ -488,7 +488,7 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 		index++
 		if node.IndexPointer+1<len(rankOutputArr[node.ShareNum]) {
 			node.IndexPointer++
-			node.ScoreObj=&rankOutputArr[node.ShareNum][node.IndexPointer]
+			node.ScoreObj=rankOutputArr[node.ShareNum][node.IndexPointer]
 			heap.Push(h,node)
 		}
 	}

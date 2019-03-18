@@ -35,7 +35,7 @@ type rankerRankReq struct {
 
 type rankerReturnReq struct {
 	// docs    types.ScoredDocs
-	docs    []types.ScoredID
+	docs    []*types.ScoredID
 	numDocs int
 }
 
