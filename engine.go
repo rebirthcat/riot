@@ -450,7 +450,8 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 		// 设置超时
 		rankOutputArr, numDocs, isTimeout = engine.TimeOut(request, rankerReturnChan)
 	}
-
+	log.Println(len(rankOutputArr[0]))
+	log.Println(rankOutputArr)
 	// 仅当 CountDocsOnly 为 false 时才充填 output.Docs
 	if request.CountDocsOnly {
 		output.Tokens=tokens
