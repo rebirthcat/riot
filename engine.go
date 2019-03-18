@@ -452,6 +452,7 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 	}
 	log.Println(len(rankOutputArr[0]))
 	log.Println(rankOutputArr)
+	log.Println(*rankOutputArr[0][0])
 	// 仅当 CountDocsOnly 为 false 时才充填 output.Docs
 	if request.CountDocsOnly {
 		output.Tokens=tokens
