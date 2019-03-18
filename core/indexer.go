@@ -732,9 +732,9 @@ func (indexer *Indexer) internalLookup(
 	//排序
 	if !countDocsOnly {
 		if orderReverse {
-			sort.Sort(sort.Reverse(types.ScoredIDs(docs)))
-		}else {
 			sort.Sort(types.ScoredIDs(docs))
+		}else {
+			sort.Sort(sort.Reverse(types.ScoredIDs(docs)))
 		}
 	}
 	return
