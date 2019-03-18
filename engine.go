@@ -482,18 +482,14 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 			heap.Push(h,node)
 		}
 	}
-	log.Println(h)
-	log.Println("=============")
 	index:=0
-	fmt.Println(len(res))
-	for index >= len(res){
+	for index < len(res){
 		n:=heap.Pop(h)
 		if n==nil {
 			break
 		}
 		node:=n.(types.HeapNode)
 		res[index]=*node.ScoreObj
-		log.Println(res[index])
 		index++
 		if node.IndexPointer+1<len(rankOutputArr[node.ShareNum]) {
 			node.IndexPointer++
