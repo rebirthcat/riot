@@ -450,9 +450,6 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 		// 设置超时
 		rankOutputArr, numDocs, isTimeout = engine.TimeOut(request, rankerReturnChan)
 	}
-	log.Println(len(rankOutputArr[0]))
-	log.Println(rankOutputArr)
-	log.Println(*rankOutputArr[0][0])
 	// 仅当 CountDocsOnly 为 false 时才充填 output.Docs
 	if request.CountDocsOnly {
 		output.Tokens=tokens
@@ -485,6 +482,7 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 			heap.Push(h,node)
 		}
 	}
+	log.Println(h)
 
 	index:=0
 	for index >= len(res){
@@ -494,6 +492,7 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 		}
 		node:=n.(types.HeapNode)
 		res[index]=*node.ScoreObj
+		log.Println(res[index])
 		index++
 		if node.IndexPointer+1<len(rankOutputArr[node.ShareNum]) {
 			node.IndexPointer++
