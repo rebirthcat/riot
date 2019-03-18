@@ -395,13 +395,12 @@ func maxRankOutput(rankOpts types.RankOpts, rankLen int) (int, int) {
 // NotTimeOut not set engine timeout
 func (engine *Engine) NotTimeOut(request types.SearchReq, rankerReturnChan chan rankerReturnReq) (
 	rankOutID [][]*types.ScoredID, numDocs int) {
-
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		rankerOutput := <-rankerReturnChan
 		if !request.CountDocsOnly {
 			if rankerOutput.docs != nil {
-				//rankOutID=append(rankOutID,rankerOutput.docs...)
-				rankOutID[shard] = rankerOutput.docs
+				rankOutID=append(rankOutID,rankerOutput.docs)
+				//rankOutID[shard] = rankerOutput.docs
 			}
 		}
 		numDocs += rankerOutput.numDocs
@@ -416,13 +415,13 @@ func (engine *Engine) TimeOut(request types.SearchReq,
 
 	deadline := time.Now().Add(time.Nanosecond *
 		time.Duration(NumNanosecondsInAMillisecond*request.Timeout))
-
+	rankOutID=make([][]*types.ScoredID,engine.initOptions.NumShards)
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		select {
 		case rankerOutput := <-rankerReturnChan:
 			if !request.CountDocsOnly {
 				if rankerOutput.docs != nil {
-					rankOutID[shard]=rankerOutput.docs
+					rankOutID=append(rankOutID,rankerOutput.docs)
 				}
 			}
 			numDocs += rankerOutput.numDocs
