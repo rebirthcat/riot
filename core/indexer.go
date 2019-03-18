@@ -640,8 +640,8 @@ func (indexer *Indexer) internalLookup(
 				}
 			}
 
-			//indexedDoc := types.IndexedDoc{}
-			indexedDoc := &types.ScoredID{}
+			indexedDoc,_:=types.ScoreIDPool.Get().(*types.ScoredID)
+			//indexedDoc := &types.ScoredID{}
 			indexedDoc.DocId = baseDocId
 			// 当为 LocsIndex 时计算关键词紧邻距离
 			if indexer.initOptions.IndexType == types.LocsIndex {
@@ -654,9 +654,9 @@ func (indexer *Indexer) internalLookup(
 				}
 				if numTokensWithLocations != len(tokens) {
 					if !countDocsOnly {
-						docs = append(docs, &types.ScoredID{
-							DocId: baseDocId,
-						})
+						docs = append(docs, indexedDoc)
+					}else {
+						types.ScoreIDPool.Put(indexedDoc)
 					}
 					numDocs++
 					//当某个关键字对应多个文档且有 lable 关键字存在时，若直接 break,
@@ -722,16 +722,20 @@ func (indexer *Indexer) internalLookup(
 
 			if !countDocsOnly {
 				docs = append(docs, indexedDoc)
+			}else {
+				types.ScoreIDPool.Put(indexedDoc)
 			}
 			numDocs++
 		}
 	}
 
 	//排序
-	if orderReverse {
-		sort.Sort(sort.Reverse(types.ScoredIDs(docs)))
-	}else {
-		sort.Sort(types.ScoredIDs(docs))
+	if !countDocsOnly {
+		if orderReverse {
+			sort.Sort(sort.Reverse(types.ScoredIDs(docs)))
+		}else {
+			sort.Sort(types.ScoredIDs(docs))
+		}
 	}
 	return
 }

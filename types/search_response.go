@@ -15,6 +15,8 @@
 
 package types
 
+import "sync"
+
 // BaseResp search response options
 type BaseResp struct {
 	// 搜索用到的关键词
@@ -195,5 +197,11 @@ type OutputPage struct {
 
 
 
+
+var ScoreIDPool=&sync.Pool{
+	New: func() interface{} {
+		return new(ScoredID)
+	},
+}
 
 

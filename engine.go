@@ -447,12 +447,20 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 	if timeout <= 0 {
 		// 不设置超时
 		rankOutputArr, numDocs = engine.NotTimeOut(request, rankerReturnChan)
-		//numDocs += num
 	} else {
 		// 设置超时
 		rankOutputArr, numDocs, isTimeout = engine.TimeOut(request, rankerReturnChan)
-		//numDocs += num
 	}
+
+	// 仅当 CountDocsOnly 为 false 时才充填 output.Docs
+	if request.CountDocsOnly {
+		output.Tokens=tokens
+		output.NumDocs=numDocs
+		output.Timeout=isTimeout
+		freeObjToPool(rankOutputArr)
+		return
+	}
+
 
 	// 再排序 使用堆排序
 	//定义结果数组
@@ -495,17 +503,26 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 
 
 	// 准备输出
+	output.Docs=res
 	output.Tokens = tokens
-	// 仅当 CountDocsOnly 为 false 时才充填 output.Docs
-	if !request.CountDocsOnly {
-		output.Docs=res
-	}
-
-	output.NumDocs = numDocs
+	output.NumDocs = index
 	output.Timeout = isTimeout
-
+	freeObjToPool(rankOutputArr)
 	return
 }
+
+func freeObjToPool(objarr [][]*types.ScoredID)  {
+	if objarr==nil||len(objarr)==0 {
+		return
+	}
+	for i := 0; i < len(objarr); i++ {
+		for _,obj:=range objarr[i]{
+			types.ScoreIDPool.Put(obj)
+		}
+	}
+	return
+}
+
 
 // SearchDoc find the document that satisfies the search criteria.
 // This function is thread safe, return not IDonly
