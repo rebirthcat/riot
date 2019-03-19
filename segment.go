@@ -244,8 +244,6 @@ func (engine *Engine) makeTokensMap(request segmenterReq) (map[string][]int, int
 	return tokensMap, numTokens
 }
 
-
-
 func (engine *Engine) segmenterWorker() {
 	for {
 		request := <-engine.segmenterChan
@@ -281,11 +279,11 @@ func (engine *Engine) segmenterWorker() {
 
 		indexerRequest := indexerAddDocReq{
 			doc: &types.DocIndex{
-				DocId:    request.docId,
-				TokenLen: float32(numTokens),
-				Keywords: make([]types.KeywordIndex, len(tokensMap)),
-				Field:request.data.Fields,
-				FieldFilter:request.data.FieldsFilter,
+				DocId:       request.docId,
+				TokenLen:    float32(numTokens),
+				Keywords:    make([]types.KeywordIndex, len(tokensMap)),
+				Field:       request.data.Fields,
+				FieldFilter: request.data.FieldsFilter,
 			},
 			forceUpdate: request.forceUpdate,
 		}
@@ -308,11 +306,6 @@ func (engine *Engine) segmenterWorker() {
 				engine.indexerAddDocChans[i] <- indexerAddDocReq{forceUpdate: true}
 			}
 		}
-		//rankerRequest := rankerAddDocReq{
-		//	// docId: request.docId, fields: request.data.Fields}
-		//	docId: request.docId, fields: request.data.Fields,
-		//	content: request.data.Content, attri: request.data.Attri}
-		//engine.rankerAddDocChans[shard] <- rankerRequest
 	}
 }
 

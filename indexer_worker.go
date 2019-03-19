@@ -32,7 +32,7 @@ type indexerLookupReq struct {
 	docIds           map[string]bool
 	orderReverse     bool
 	scoringCriteria  types.ScoringCriteria
-	filter    		 types.FilterCriteria
+	filter           types.FilterCriteria
 	rankerReturnChan chan rankerReturnReq
 	orderless        bool
 }
@@ -62,24 +62,23 @@ func (engine *Engine) indexerRemoveDoc(shard int) {
 	}
 }
 
-func (engine *Engine) orderLess(
-	request indexerLookupReq, docs []types.IndexedDoc) {
-		var outputDocs types.ScoredIDs
-		for _, d := range docs {
-			outputDocs = append(outputDocs, &types.ScoredID{
-				DocId:            d.DocId,
-				TokenSnippetLocs: d.TokenSnippetLocs,
-				TokenLocs:        d.TokenLocs,
-			})
-		}
-
-		request.rankerReturnChan <- rankerReturnReq{
-			docs:    outputDocs,
-			numDocs: len(outputDocs),
-		}
-		return
-
-}
+//func (engine *Engine) orderLess(
+//	request indexerLookupReq, docs []types.IndexedDoc) {
+//	var outputDocs types.ScoredIDs
+//	for _, d := range docs {
+//		outputDocs = append(outputDocs, &types.ScoredID{
+//			DocId:            d.DocId,
+//			TokenSnippetLocs: d.TokenSnippetLocs,
+//			TokenLocs:        d.TokenLocs,
+//		})
+//	}
+//
+//	request.rankerReturnChan <- rankerReturnReq{
+//		docs:    outputDocs,
+//		numDocs: len(outputDocs),
+//	}
+//	return
+//}
 
 func (engine *Engine) indexerLookup(shard int) {
 	for {
@@ -87,10 +86,10 @@ func (engine *Engine) indexerLookup(shard int) {
 
 		docs, numDocs := engine.indexers[shard].Lookup(
 			request.tokens, request.labels,
-			request.docIds, request.countDocsOnly, request.scoringCriteria,request.filter,request.orderReverse)
+			request.docIds, request.countDocsOnly, request.scoringCriteria, request.filter, request.orderReverse)
 
 		request.rankerReturnChan <- rankerReturnReq{
-					docs: docs, numDocs: numDocs}
+			docs: docs, numDocs: numDocs}
 
 	}
 }

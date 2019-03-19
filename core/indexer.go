@@ -80,7 +80,7 @@ type Indexer struct {
 	initOptions types.IndexerOpts
 	initialized bool
 
-
+	storefinish bool
 
 	shardNumber int
 	//正向索引持久化静态恢复接口
@@ -135,7 +135,7 @@ func (indexer *Indexer)GetNumTotalTokenLen()uint64  {
 
 
 // Init 初始化索引器
-func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.IndexerOpts) {
+func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex string,dbPathReverseIndex string,StoreEngine string,options types.IndexerOpts) {
 	if indexer.initialized == true {
 		log.Fatal("The Indexer can not be initialized twice.")
 	}
@@ -154,11 +154,21 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int, options types.Indexe
 
 	//初始化该索引器里对应的排序所用的字段
 	indexer.rankerLock.fields=make(map[string]interface{})
-	//indexer.rankerLock.docs=make(map[string]bool)
 
 	indexer.storeUpdateForwardIndexChan=make(chan StoreForwardIndexReq,StoreChanBufLen)
 	indexer.storeUpdateReverseIndexChan=make(chan StoreReverseIndexReq,StoreChanBufLen)
 	indexer.shardNumber=shard
+
+	var erropen error
+	indexer.dbforwardIndex, erropen= store.OpenStore(dbPathForwardIndex, StoreEngine)
+	if indexer.dbforwardIndex == nil || erropen != nil {
+		log.Fatal("Unable to open database ", dbPathForwardIndex, ": ", erropen)
+	}
+
+	indexer.dbRevertIndex,erropen=store.OpenStore(dbPathReverseIndex,StoreEngine)
+	if indexer.dbRevertIndex==nil||erropen!=nil {
+		log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", erropen)
+	}
 }
 
 // getDocId 从 KeywordIndices 中得到第i个文档的 DocId
@@ -282,26 +292,30 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 		indexer.filterLock.fields[doc.DocId]=doc.FieldFilter
 		indexer.filterLock.Unlock()
 
-
-		storeforwardreq:=StoreForwardIndexReq{
-			DocID:doc.DocId,
-			Remove:false,
-			Field:doc.Field,
-			FieldFilter:doc.FieldFilter,
-		}
-		// 更新文档关键词总长度
 		if indexer.initOptions.IndexType!=types.DocIdsIndex {
 			indexer.tableLock.docTokenLens[doc.DocId] = float32(doc.TokenLen)
 			indexer.tableLock.totalTokenLen += doc.TokenLen
-			storeforwardreq.DocTokenLen=doc.TokenLen
 		}
 		var timer *time.Timer
-		timer = time.NewTimer(time.Millisecond * 100)
-		select {
-		case indexer.storeUpdateForwardIndexChan <- storeforwardreq:
-			//log
-		case <-timer.C:
-			log.Println("timeout")
+		if indexer.storefinish {
+			storeforwardreq:=StoreForwardIndexReq{
+				DocID:doc.DocId,
+				Remove:false,
+				Field:doc.Field,
+				FieldFilter:doc.FieldFilter,
+			}
+			// 更新文档关键词总长度
+			if indexer.initOptions.IndexType!=types.DocIdsIndex {
+				storeforwardreq.DocTokenLen=doc.TokenLen
+			}
+
+			timer = time.NewTimer(time.Millisecond * 100)
+			select {
+			case indexer.storeUpdateForwardIndexChan <- storeforwardreq:
+				//log
+			case <-timer.C:
+				log.Println("timeout")
+			}
 		}
 
 		docIdIsNew := true
@@ -345,24 +359,26 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			copy(indices.docIds[position+1:], indices.docIds[position:])
 			indices.docIds[position] = doc.DocId
 
-			storereversereq:=StoreReverseIndexReq{}
-			storereversereq.Token=keyword.Text
-			storereversereq.KeywordIndices.DocIds=indices.docIds
-			if indexer.initOptions.IndexType!=types.DocIdsIndex {
-				storereversereq.KeywordIndices.Frequencies=indices.frequencies
-				storereversereq.KeywordIndices.Locations=indices.locations
-			}
-			//发送至持久化
-			if timer==nil {
-				timer=time.NewTimer(time.Millisecond*100)
-			}else {
-				timer.Reset(time.Millisecond*100)
-			}
-			select {
-			case indexer.storeUpdateReverseIndexChan <- storereversereq:
-				//log.Println("a reverseindex is send to store")
-			case <-timer.C:
-				log.Println("timeout")
+			if indexer.storefinish {
+				storereversereq:=StoreReverseIndexReq{}
+				storereversereq.Token=keyword.Text
+				storereversereq.KeywordIndices.DocIds=indices.docIds
+				if indexer.initOptions.IndexType!=types.DocIdsIndex {
+					storereversereq.KeywordIndices.Frequencies=indices.frequencies
+					storereversereq.KeywordIndices.Locations=indices.locations
+				}
+				//发送至持久化
+				if timer==nil {
+					timer=time.NewTimer(time.Millisecond*100)
+				}else {
+					timer.Reset(time.Millisecond*100)
+				}
+				select {
+				case indexer.storeUpdateReverseIndexChan <- storereversereq:
+					//log.Println("a reverseindex is send to store")
+				case <-timer.C:
+					log.Println("timeout")
+				}
 			}
 		}
 		// 更新文章状态和总数

@@ -19,7 +19,7 @@ package riot
 func (engine *Engine) NumTokensAdded() uint64 {
 	var num uint64
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		num+=engine.indexers[shard].GetNumTotalTokenLen()
+		num += engine.indexers[shard].GetNumTotalTokenLen()
 	}
 	return num
 }
@@ -28,16 +28,15 @@ func (engine *Engine) NumTokensAdded() uint64 {
 func (engine *Engine) NumDocsIndexed() uint64 {
 	var num uint64
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		num+=engine.indexers[shard].GetNumDocs()
+		num += engine.indexers[shard].GetNumDocs()
 	}
 	return num
 }
 
-func (engine *Engine)NumDocsIndexedStore() uint64 {
+func (engine *Engine) NumDocsIndexedStore() uint64 {
 	var num uint64
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		num+=engine.indexers[shard].GetNumDocsStore()
+		num += engine.indexers[shard].GetNumDocsStore()
 	}
 	return num
 }
-

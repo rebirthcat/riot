@@ -36,6 +36,8 @@ type DocIndex struct {
 	FieldFilter interface{}
 }
 
+
+
 // KeywordIndex 反向索引项，这实际上标注了一个（搜索键，文档）对。
 type KeywordIndex struct {
 	// Text 搜索键的 UTF-8 文本

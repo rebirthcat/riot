@@ -50,10 +50,13 @@ const (
 	DefaultPath = "./riot-index"
 )
 
+
 // GetVersion get the riot version
 func GetVersion() string {
 	return Version
 }
+
+
 
 // Engine initialize the engine
 type Engine struct {
@@ -72,7 +75,13 @@ type Engine struct {
 	indexerRemoveDocChans []chan indexerRemoveDocReq
 
 	// 建立排序器使用的通信通道
-	indexerLookupChans   []chan indexerLookupReq
+	indexerLookupChans []chan indexerLookupReq
+}
+
+
+type rankerReturnReq struct {
+	docs    []*types.ScoredID
+	numDocs int
 }
 
 
@@ -99,7 +108,6 @@ func (engine *Engine) Indexer(options types.EngineOpts) {
 	}
 }
 
-
 // CheckMem check the memory when the memory is larger
 // than 99.99% using the store
 func (engine *Engine) CheckMem() {
@@ -119,8 +127,6 @@ func (engine *Engine) CheckMem() {
 		}
 	}
 }
-
-
 
 // WithGse Using user defined segmenter
 // If using a not nil segmenter and the dictionary is loaded,
@@ -173,32 +179,35 @@ func (engine *Engine) Init(options types.EngineOpts) {
 			engine.segmenter.LoadDict(options.GseDict)
 			engine.loaded = true
 		}
-
 		// 初始化停用词
 		engine.stopTokens.Init(options.StopTokenFile)
 	}
 
-	// 初始化索引器和排序器
-	// 启动每个索引器内部的正向索引恢复协程和反向索引恢复协程，启动每个排序器内部索引恢复协程，并阻塞等待所有协助全部执行完毕
-	wg:=sync.WaitGroup{}
-	wg.Add(options.NumShards*2)
+	// 初始化索引器
+	// 启动每个索引器内部的正向索引恢复协程和反向索引恢复协程，并阻塞等待所有协助全部执行完毕
+	wg := sync.WaitGroup{}
+	wg.Add(options.NumShards * 2)
 	for shard := 0; shard < options.NumShards; shard++ {
-		//engine.rankers = append(engine.rankers, &core.Ranker{})
-		//engine.rankers[shard].Init(shard,options.IDOnly)
 		engine.indexers = append(engine.indexers, &core.Indexer{})
-		engine.indexers[shard].Init(shard,options.StoreIndexBufLen, *options.IndexerOpts)
 		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
-		go engine.indexers[shard].StoreRecoverForwardIndex(dbPathForwardIndex,engine.initOptions.StoreEngine,engine.initOptions.DocNumber,&wg)
-		go engine.indexers[shard].StoreRecoverReverseIndex(dbPathReverseIndex,engine.initOptions.StoreEngine,engine.initOptions.TokenNumber,&wg)
+		engine.indexers[shard].Init(shard, options.StoreIndexBufLen, dbPathForwardIndex, dbPathReverseIndex,
+			options.StoreEngine, *options.IndexerOpts)
+		if options.Recover {
+			go engine.indexers[shard].StoreRecoverForwardIndex(options.DocNumber, &wg)
+			go engine.indexers[shard].StoreRecoverReverseIndex(options.TokenNumber, &wg)
+		} else {
+			wg.Done()
+			wg.Done()
+		}
 	}
 	wg.Wait()
 	log.Println("index recover finish")
-	log.Printf("store number is %v",engine.NumDocsIndexedStore())
-	log.Printf("document number is %v",engine.NumDocsIndexed())
-	log.Printf("tokens number is %v",engine.NumTokensAdded())
+	log.Printf("store number is %v", engine.NumDocsIndexedStore())
+	log.Printf("document number is %v", engine.NumDocsIndexed())
+	log.Printf("tokens number is %v", engine.NumTokensAdded())
 	// 初始化分词器通道
 	engine.segmenterChan = make(
 		chan segmenterReq, options.NumGseThreads)
@@ -212,13 +221,12 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	// engine.CheckMem(engine.initOptions.UseStore)
 	engine.CheckMem()
 
-
 	// 启动分词器
 	for iThread := 0; iThread < options.NumGseThreads; iThread++ {
 		go engine.segmenterWorker()
 	}
 
-	// 启动索引器和排序器以及各自对应的持久化工作协程
+	// 启动索引器以及各自对应的持久化工作协程
 	for shard := 0; shard < options.NumShards; shard++ {
 		go engine.indexerAddDoc(shard)
 		go engine.indexerRemoveDoc(shard)
@@ -229,6 +237,17 @@ func (engine *Engine) Init(options types.EngineOpts) {
 			go engine.indexerLookup(shard)
 		}
 	}
+}
+
+func (engine *Engine) StoreReBuild(options types.EngineOpts) {
+	wg := sync.WaitGroup{}
+	wg.Add(options.NumShards * 2)
+	for shard := 0; shard < options.NumShards; shard++ {
+		go engine.indexers[shard].StoreForwardIndexOneTime(&wg)
+		go engine.indexers[shard].StoreReverseIndexOneTime(&wg)
+		engine.indexers[shard].StoreFinish()
+	}
+	wg.Wait()
 }
 
 // IndexDoc add the document to the index
@@ -244,7 +263,7 @@ func (engine *Engine) Init(options types.EngineOpts) {
 //      2. 这个函数调用是非同步的，也就是说在函数返回时有可能文档还没有加入索引中，因此
 //         如果立刻调用Search可能无法查询到这个文档。强制刷新索引请调用FlushIndex函数。
 func (engine *Engine) IndexDoc(docId string, data types.DocData,
-	forceUpdate ...bool) error{
+	forceUpdate ...bool) error {
 	engine.index(docId, data, forceUpdate...)
 	return nil
 }
@@ -285,7 +304,7 @@ func (engine *Engine) internalIndexDoc(docId string, data types.DocData,
 //      1. 这个函数是线程安全的，请尽可能并发调用以提高索引速度
 //      2. 这个函数调用是非同步的，也就是说在函数返回时有可能文档还没有加入索引中，因此
 //         如果立刻调用 Search 可能无法查询到这个文档。强制刷新索引请调用 FlushIndex 函数。
-func (engine *Engine) RemoveDoc(docId string, forceUpdate ...bool) error{
+func (engine *Engine) RemoveDoc(docId string, forceUpdate ...bool) error {
 	var force bool
 	if len(forceUpdate) > 0 {
 		force = forceUpdate[0]
@@ -399,7 +418,7 @@ func (engine *Engine) NotTimeOut(request types.SearchReq, rankerReturnChan chan 
 		rankerOutput := <-rankerReturnChan
 		if !request.CountDocsOnly {
 			if rankerOutput.docs != nil {
-				rankOutID=append(rankOutID,rankerOutput.docs)
+				rankOutID = append(rankOutID, rankerOutput.docs)
 				//rankOutID[shard] = rankerOutput.docs
 			}
 		}
@@ -411,17 +430,17 @@ func (engine *Engine) NotTimeOut(request types.SearchReq, rankerReturnChan chan 
 // TimeOut set engine timeout
 func (engine *Engine) TimeOut(request types.SearchReq,
 	rankerReturnChan chan rankerReturnReq) (
-	rankOutID  [][]*types.ScoredID, numDocs int, isTimeout bool) {
+	rankOutID [][]*types.ScoredID, numDocs int, isTimeout bool) {
 
 	deadline := time.Now().Add(time.Nanosecond *
 		time.Duration(NumNanosecondsInAMillisecond*request.Timeout))
-	rankOutID=make([][]*types.ScoredID,engine.initOptions.NumShards)
+	rankOutID = make([][]*types.ScoredID, engine.initOptions.NumShards)
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		select {
 		case rankerOutput := <-rankerReturnChan:
 			if !request.CountDocsOnly {
 				if rankerOutput.docs != nil {
-					rankOutID=append(rankOutID,rankerOutput.docs)
+					rankOutID = append(rankOutID, rankerOutput.docs)
 				}
 			}
 			numDocs += rankerOutput.numDocs
@@ -452,58 +471,55 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 	}
 	// 仅当 CountDocsOnly 为 false 时才充填 output.Docs
 	if request.CountDocsOnly {
-		output.Tokens=tokens
-		output.NumDocs=numDocs
-		output.Timeout=isTimeout
+		output.Tokens = tokens
+		output.NumDocs = numDocs
+		output.Timeout = isTimeout
 		freeObjToPool(rankOutputArr)
 		return
 	}
 
-
 	// 再排序 使用堆排序
 	//定义结果数组
 	var res []types.ScoredID
-	if request.MaxOutputNum==0||request.MaxOutputNum>numDocs {
-		res=make([]types.ScoredID,numDocs)
-	}else {
-		res=make([]types.ScoredID,request.MaxOutputNum)
+	if request.MaxOutputNum == 0 || request.MaxOutputNum > numDocs {
+		res = make([]types.ScoredID, numDocs)
+	} else {
+		res = make([]types.ScoredID, request.MaxOutputNum)
 	}
 
-
-	h:=&types.NodeHeap{
-		Arr:[]types.HeapNode{},
-		IsSmallTop:request.OrderReverse,
+	h := &types.NodeHeap{
+		Arr:        []types.HeapNode{},
+		IsSmallTop: request.OrderReverse,
 	}
-	numshard:=len(rankOutputArr)
+	numshard := len(rankOutputArr)
 	for i := 0; i < numshard; i++ {
-		if len(rankOutputArr[i])>0 {
-			node:=types.HeapNode{
-				ScoreObj:rankOutputArr[i][0],
-				ShareNum:i,
-				IndexPointer:0,
+		if len(rankOutputArr[i]) > 0 {
+			node := types.HeapNode{
+				ScoreObj:     rankOutputArr[i][0],
+				ShareNum:     i,
+				IndexPointer: 0,
 			}
-			heap.Push(h,node)
+			heap.Push(h, node)
 		}
 	}
-	index:=0
-	for index < len(res){
-		n:=heap.Pop(h)
-		if n==nil {
+	index := 0
+	for index < len(res) {
+		n := heap.Pop(h)
+		if n == nil {
 			break
 		}
-		node:=n.(types.HeapNode)
-		res[index]=*node.ScoreObj
+		node := n.(types.HeapNode)
+		res[index] = *node.ScoreObj
 		index++
-		if node.IndexPointer+1<len(rankOutputArr[node.ShareNum]) {
+		if node.IndexPointer+1 < len(rankOutputArr[node.ShareNum]) {
 			node.IndexPointer++
-			node.ScoreObj=rankOutputArr[node.ShareNum][node.IndexPointer]
-			heap.Push(h,node)
+			node.ScoreObj = rankOutputArr[node.ShareNum][node.IndexPointer]
+			heap.Push(h, node)
 		}
 	}
 
-
 	// 准备输出
-	output.Docs=res
+	output.Docs = res
 	output.Tokens = tokens
 	output.NumDocs = index
 	output.Timeout = isTimeout
@@ -511,18 +527,21 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 	return
 }
 
-func freeObjToPool(objarr [][]*types.ScoredID)  {
-	if objarr==nil||len(objarr)==0 {
+func freeObjToPool(objarr [][]*types.ScoredID) {
+	if objarr == nil || len(objarr) == 0 {
 		return
 	}
 	for i := 0; i < len(objarr); i++ {
-		for _,obj:=range objarr[i]{
+		for _, obj := range objarr[i] {
+			obj.Scores = 0
+			obj.TokenProximity = 0
+			obj.TokenLocs = nil
+			obj.TokenSnippetLocs = nil
 			types.ScoreIDPool.Put(obj)
 		}
 	}
 	return
 }
-
 
 // SearchDoc find the document that satisfies the search criteria.
 // This function is thread safe, return not IDonly
@@ -576,9 +595,7 @@ func (engine *Engine) Search(request types.SearchReq) (output types.SearchID) {
 		engine.indexerLookupChans[shard] <- lookupRequest
 	}
 
-
 	output = engine.RankID(request, tokens, rankerReturnChan)
-
 
 	return
 }
@@ -586,7 +603,7 @@ func (engine *Engine) Search(request types.SearchReq) (output types.SearchID) {
 // Flush block wait until all indexes are added
 // 阻塞等待直到所有索引添加完毕
 func (engine *Engine) Flush() {
-	wg :=sync.WaitGroup{}
+	wg := sync.WaitGroup{}
 	wg.Add(engine.initOptions.NumShards)
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		go engine.indexers[shard].Flush(&wg)
@@ -606,22 +623,20 @@ func (engine *Engine) Close() {
 	engine.Flush()
 	//time.Sleep(time.Second*300)
 	for i, indexer := range engine.indexers {
-		log.Printf("indexer %v :document number is %v,reverse index table len is %v",i,indexer.GetNumDocsStore(),indexer.GetTableLen())
+		log.Printf("indexer %v :document number is %v,reverse index table len is %v", i, indexer.GetNumDocsStore(), indexer.GetTableLen())
 	}
 	for _, indexer := range engine.indexers {
-		dbf:=indexer.GetForwardIndexDB()
-		if dbf!=nil {
+		dbf := indexer.GetForwardIndexDB()
+		if dbf != nil {
 			dbf.Close()
 		}
-		dbr:=indexer.GetReverseIndexDB()
-		if dbr!=nil {
+		dbr := indexer.GetReverseIndexDB()
+		if dbr != nil {
 			dbr.Close()
 		}
 	}
 
 }
-
-
 
 // 从文本hash得到要分配到的 shard
 func (engine *Engine) getShard(hash uint32) int {

@@ -68,9 +68,12 @@ func (indexer *Indexer)OpenReverseIndexDB(dbPath string,StoreEngine string)  {
 }
 
 
-
-func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string,docNumber uint64, wg *sync.WaitGroup)  {
+//系统启动时recover索引
+func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitGroup)  {
 	//indexer中的字段
+	if indexer.dbforwardIndex==nil {
+		log.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
+	}
 	numDocs:= uint64(0)
 	totalTokenLen:=float32(0)
 	var docTokenLens map[string]float32
@@ -82,11 +85,11 @@ func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string
 	fields:=make(map[string]interface{},docNumber)
 	//自定义过滤器字段
 	fieldsFilter:=make(map[string]interface{},docNumber)
-	var erropen error
-	indexer.dbforwardIndex, erropen= store.OpenStore(dbPath, StoreEngine)
-	if indexer.dbforwardIndex == nil || erropen != nil {
-		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
-	}
+	//var erropen error
+	//indexer.dbforwardIndex, erropen= store.OpenStore(dbPath, StoreEngine)
+	//if indexer.dbforwardIndex == nil || erropen != nil {
+	//	log.Fatal("Unable to open database ", dbPath, ": ", erropen)
+	//}
 	//defer indexer.dbforwardIndex.Close()
 	indexer.dbforwardIndex.ForEach(func(k, v []byte) error {
 		key, value := k, v
@@ -134,13 +137,16 @@ func (indexer *Indexer)StoreRecoverForwardIndex(dbPath string,StoreEngine string
 
 
 
-func (indexer *Indexer)StoreRecoverReverseIndex(dbPath string,StoreEngine string,tokenNumber uint64, wg *sync.WaitGroup)  {
+func (indexer *Indexer)StoreRecoverReverseIndex(tokenNumber uint64, wg *sync.WaitGroup)  {
 	table:=make(map[string]*KeywordIndices,tokenNumber)
-	var erropen error
-	indexer.dbRevertIndex,erropen=store.OpenStore(dbPath,StoreEngine)
-	if indexer.dbRevertIndex==nil||erropen!=nil {
-		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
+	if indexer.dbRevertIndex==nil {
+		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
 	}
+	//var erropen error
+	//indexer.dbRevertIndex,erropen=store.OpenStore(dbPath,StoreEngine)
+	//if indexer.dbRevertIndex==nil||erropen!=nil {
+	//	log.Fatal("Unable to open database ", dbPath, ": ", erropen)
+	//}
 	//defer indexer.dbRevertIndex.Close()
 	indexer.dbRevertIndex.ForEach(func(k, v []byte) error {
 		key, value := k, v
@@ -178,6 +184,58 @@ func (indexer *Indexer)StoreRecoverReverseIndex(dbPath string,StoreEngine string
 	wg.Done()
 }
 
+
+//系统启动时rebuild索引
+func (indexer *Indexer)StoreForwardIndexOneTime(wg *sync.WaitGroup)  {
+	if indexer.dbforwardIndex==nil {
+		log.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
+	}
+	for DocId,DocTokenLen:=range indexer.tableLock.docTokenLens{
+
+		buf := bytes.Buffer{}
+		enc := gob.NewEncoder(&buf)
+		if indexer.initOptions.IndexType!=types.DocIdsIndex {
+			enc.Encode(StoreForwardIndex{
+				TokenLen: DocTokenLen,
+				Field:    indexer.rankerLock.fields[DocId],
+				FieldFilter:indexer.filterLock.fields[DocId],
+			})
+		}else {
+			enc.Encode(StoreForwardIndex{
+				Field:    indexer.rankerLock.fields[DocId],
+				FieldFilter:indexer.filterLock.fields[DocId],
+			})
+		}
+		indexer.dbforwardIndex.Set([]byte(DocId), buf.Bytes())
+		atomic.AddUint64(&indexer.numDocsStore, 1)
+	}
+	wg.Done()
+}
+
+func (indexer *Indexer)StoreFinish()  {
+	indexer.storefinish=true
+}
+
+func (indexer *Indexer)StoreReverseIndexOneTime(wg *sync.WaitGroup)  {
+	if indexer.dbRevertIndex==nil {
+		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
+	}
+	for Token,KeywordIndices:=range indexer.tableLock.table{
+		buf:=bytes.Buffer{}
+		enc:=gob.NewEncoder(&buf)
+		enc.Encode(StoreReverseIndex{
+			DocIds:KeywordIndices.docIds,
+			Frequencies:KeywordIndices.frequencies,
+			Locations:KeywordIndices.locations,
+		})
+		indexer.dbRevertIndex.Set([]byte(Token),buf.Bytes())
+	}
+
+	wg.Done()
+}
+
+
+//系统正常运行中动态的添加索引的持久化
 func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
 	if indexer.dbforwardIndex==nil {
 		log.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
@@ -223,3 +281,5 @@ func (indexer *Indexer) StoreUpdateReverseIndexWorker() {
 		indexer.dbRevertIndex.Set([]byte(request.Token),buf.Bytes())
 	}
 }
+
+

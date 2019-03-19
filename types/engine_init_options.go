@@ -111,6 +111,8 @@ type EngineOpts struct {
 	//第一次启动时预估文档数量和索引关键词数量，恢复启动时自动从文件中读出准确数量
 	DocNumber uint64
 	TokenNumber uint64
+
+	Recover bool
 }
 
 // Init init engine options
