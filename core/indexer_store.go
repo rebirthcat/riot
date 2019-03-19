@@ -212,8 +212,8 @@ func (indexer *Indexer)StoreForwardIndexOneTime(wg *sync.WaitGroup)  {
 	wg.Done()
 }
 
-func (indexer *Indexer)StoreFinish()  {
-	indexer.storefinish=true
+func (indexer *Indexer)StoreUpdateBegin()  {
+	indexer.storeUpdateBegin=true
 }
 
 func (indexer *Indexer)StoreReverseIndexOneTime(wg *sync.WaitGroup)  {

@@ -198,6 +198,7 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		if options.Recover {
 			go engine.indexers[shard].StoreRecoverForwardIndex(options.DocNumber, &wg)
 			go engine.indexers[shard].StoreRecoverReverseIndex(options.TokenNumber, &wg)
+			engine.indexers[shard].StoreUpdateBegin()
 		} else {
 			wg.Done()
 			wg.Done()
@@ -245,7 +246,7 @@ func (engine *Engine) StoreReBuild() {
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		go engine.indexers[shard].StoreForwardIndexOneTime(&wg)
 		go engine.indexers[shard].StoreReverseIndexOneTime(&wg)
-		engine.indexers[shard].StoreFinish()
+		engine.indexers[shard].StoreUpdateBegin()
 	}
 	wg.Wait()
 }

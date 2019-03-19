@@ -80,7 +80,7 @@ type Indexer struct {
 	initOptions types.IndexerOpts
 	initialized bool
 
-	storefinish bool
+	storeUpdateBegin bool
 
 	shardNumber int
 	//正向索引持久化静态恢复接口
@@ -299,7 +299,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indexer.tableLock.totalTokenLen += doc.TokenLen
 		}
 		var timer *time.Timer
-		if indexer.storefinish {
+		if indexer.storeUpdateBegin {
 			storeforwardreq:=StoreForwardIndexReq{
 				DocID:doc.DocId,
 				Remove:false,
@@ -361,7 +361,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			copy(indices.docIds[position+1:], indices.docIds[position:])
 			indices.docIds[position] = doc.DocId
 
-			if indexer.storefinish {
+			if indexer.storeUpdateBegin {
 				storereversereq:=StoreReverseIndexReq{}
 				storereversereq.Token=keyword.Text
 				storereversereq.KeywordIndices.DocIds=indices.docIds
