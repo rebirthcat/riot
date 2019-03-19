@@ -239,10 +239,10 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	}
 }
 
-func (engine *Engine) StoreReBuild(options types.EngineOpts) {
+func (engine *Engine) StoreReBuild() {
 	wg := sync.WaitGroup{}
-	wg.Add(options.NumShards * 2)
-	for shard := 0; shard < options.NumShards; shard++ {
+	wg.Add(engine.initOptions.NumShards * 2)
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		go engine.indexers[shard].StoreForwardIndexOneTime(&wg)
 		go engine.indexers[shard].StoreReverseIndexOneTime(&wg)
 		engine.indexers[shard].StoreFinish()
