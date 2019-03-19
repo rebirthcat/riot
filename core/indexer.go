@@ -154,6 +154,8 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex st
 
 	//初始化该索引器里对应的排序所用的字段
 	indexer.rankerLock.fields=make(map[string]interface{})
+	//初始化该索引器里对应的过滤器所用的字段
+	indexer.filterLock.fields=make(map[string]interface{})
 
 	indexer.storeUpdateForwardIndexChan=make(chan StoreForwardIndexReq,StoreChanBufLen)
 	indexer.storeUpdateReverseIndexChan=make(chan StoreReverseIndexReq,StoreChanBufLen)
