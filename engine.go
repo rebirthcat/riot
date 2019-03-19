@@ -194,7 +194,7 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
 		engine.indexers[shard].Init(shard, options.StoreIndexBufLen, dbPathForwardIndex, dbPathReverseIndex,
-			options.StoreEngine, *options.IndexerOpts)
+			options.StoreEngine, options.DocNumber,options.TokenNumber,*options.IndexerOpts)
 		if options.Recover {
 			go engine.indexers[shard].StoreRecoverForwardIndex(options.DocNumber, &wg)
 			go engine.indexers[shard].StoreRecoverReverseIndex(options.TokenNumber, &wg)

@@ -135,7 +135,7 @@ func (indexer *Indexer)GetNumTotalTokenLen()uint64  {
 
 
 // Init 初始化索引器
-func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex string,dbPathReverseIndex string,StoreEngine string,options types.IndexerOpts) {
+func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex string,dbPathReverseIndex string,StoreEngine string, docNumber uint64,tokenNumber uint64,options types.IndexerOpts) {
 	if indexer.initialized == true {
 		log.Fatal("The Indexer can not be initialized twice.")
 	}
@@ -143,19 +143,19 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex st
 	indexer.initOptions = options
 	indexer.initialized = true
 
-	indexer.tableLock.table = make(map[string]*KeywordIndices)
-	indexer.tableLock.docsState = make(map[string]int)
+	indexer.tableLock.table = make(map[string]*KeywordIndices,tokenNumber)
+	indexer.tableLock.docsState = make(map[string]int,docNumber)
 	indexer.addCacheLock.addCache = make(
 		[]*types.DocIndex, indexer.initOptions.DocCacheSize)
 
 	indexer.removeCacheLock.removeCache = make(
-		[]string, indexer.initOptions.DocCacheSize*2)
-	indexer.tableLock.docTokenLens = make(map[string]float32)
+		[]string, indexer.initOptions.DocCacheSize)
+	indexer.tableLock.docTokenLens = make(map[string]float32,docNumber)
 
 	//初始化该索引器里对应的排序所用的字段
-	indexer.rankerLock.fields=make(map[string]interface{})
+	indexer.rankerLock.fields=make(map[string]interface{},docNumber)
 	//初始化该索引器里对应的过滤器所用的字段
-	indexer.filterLock.fields=make(map[string]interface{})
+	indexer.filterLock.fields=make(map[string]interface{},docNumber)
 
 	indexer.storeUpdateForwardIndexChan=make(chan StoreForwardIndexReq,StoreChanBufLen)
 	indexer.storeUpdateReverseIndexChan=make(chan StoreReverseIndexReq,StoreChanBufLen)
