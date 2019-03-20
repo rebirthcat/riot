@@ -241,14 +241,13 @@ func (engine *Engine) Init(options types.EngineOpts) {
 }
 
 func (engine *Engine) StoreReBuild() {
-	wg := sync.WaitGroup{}
-	wg.Add(engine.initOptions.NumShards * 2)
+
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		go engine.indexers[shard].StoreForwardIndexOneTime(&wg)
-		go engine.indexers[shard].StoreReverseIndexOneTime(&wg)
+		engine.indexers[shard].StoreReverseIndexOneTime()
+		engine.indexers[shard].StoreForwardIndexOneTime()
 		engine.indexers[shard].StoreUpdateBegin()
 	}
-	wg.Wait()
+
 }
 
 // IndexDoc add the document to the index

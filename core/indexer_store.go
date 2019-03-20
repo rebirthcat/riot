@@ -186,7 +186,7 @@ func (indexer *Indexer)StoreRecoverReverseIndex(tokenNumber uint64, wg *sync.Wai
 
 
 //系统启动时rebuild索引
-func (indexer *Indexer)StoreForwardIndexOneTime(wg *sync.WaitGroup)  {
+func (indexer *Indexer)StoreForwardIndexOneTime()  {
 	if indexer.dbforwardIndex==nil {
 		log.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
 	}
@@ -209,14 +209,14 @@ func (indexer *Indexer)StoreForwardIndexOneTime(wg *sync.WaitGroup)  {
 		indexer.dbforwardIndex.Set([]byte(DocId), buf.Bytes())
 		atomic.AddUint64(&indexer.numDocsStore, 1)
 	}
-	wg.Done()
+	//wg.Done()
 }
 
 func (indexer *Indexer)StoreUpdateBegin()  {
 	indexer.storeUpdateBegin=true
 }
 
-func (indexer *Indexer)StoreReverseIndexOneTime(wg *sync.WaitGroup)  {
+func (indexer *Indexer)StoreReverseIndexOneTime()  {
 	if indexer.dbRevertIndex==nil {
 		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
 	}
@@ -231,7 +231,7 @@ func (indexer *Indexer)StoreReverseIndexOneTime(wg *sync.WaitGroup)  {
 		indexer.dbRevertIndex.Set([]byte(Token),buf.Bytes())
 	}
 
-	wg.Done()
+	//wg.Done()
 }
 
 
