@@ -50,13 +50,10 @@ const (
 	DefaultPath = "./riot-index"
 )
 
-
 // GetVersion get the riot version
 func GetVersion() string {
 	return Version
 }
-
-
 
 // Engine initialize the engine
 type Engine struct {
@@ -78,12 +75,10 @@ type Engine struct {
 	indexerLookupChans []chan indexerLookupReq
 }
 
-
 type rankerReturnReq struct {
 	docs    []*types.ScoredID
 	numDocs int
 }
-
 
 // Indexer initialize the indexer channel
 func (engine *Engine) Indexer(options types.EngineOpts) {
@@ -159,10 +154,6 @@ func (engine *Engine) initDef(options types.EngineOpts) types.EngineOpts {
 
 // Init initialize the engine
 func (engine *Engine) Init(options types.EngineOpts) {
-	// 将线程数设置为CPU数
-	// runtime.GOMAXPROCS(runtime.NumCPU())
-	// runtime.GOMAXPROCS(128)
-
 	// 初始化初始参数
 	if engine.initialized {
 		log.Fatal("Do not re-initialize the engine.")
@@ -184,27 +175,24 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	}
 
 	// 初始化索引器
-	// 启动每个索引器内部的正向索引恢复协程和反向索引恢复协程，并阻塞等待所有协助全部执行完毕
-	wg := sync.WaitGroup{}
-	wg.Add(options.NumShards * 2)
-	for shard := 0; shard < options.NumShards; shard++ {
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		engine.indexers = append(engine.indexers, &core.Indexer{})
 		dbPathForwardIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".forwardindex." + strconv.Itoa(shard)
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
-		engine.indexers[shard].Init(shard, options.StoreIndexBufLen, dbPathForwardIndex, dbPathReverseIndex,
-			options.StoreEngine, options.DocNumber,options.TokenNumber,*options.IndexerOpts)
-		if options.Recover {
-			go engine.indexers[shard].StoreRecoverForwardIndex(options.DocNumber, &wg)
-			go engine.indexers[shard].StoreRecoverReverseIndex(options.TokenNumber, &wg)
-			engine.indexers[shard].StoreUpdateBegin()
-		} else {
-			wg.Done()
-			wg.Done()
+		engine.indexers[shard].Init(shard, engine.initOptions.StoreIndexBufLen, dbPathForwardIndex, dbPathReverseIndex,
+			engine.initOptions.StoreEngine, engine.initOptions.DocNumber, engine.initOptions.TokenNumber, *engine.initOptions.IndexerOpts)
+	}
+
+	// 每个索引器内部持久化恢复过程
+	if options.Recover {
+		if options.StoreConcurrent {
+			engine.StoreRecoverConcurrent()
+		}else {
+			engine.StoreRecoverOneByOne()
 		}
 	}
-	wg.Wait()
 	log.Println("index recover finish")
 	log.Printf("store number is %v", engine.NumDocsIndexedStore())
 	log.Printf("document number is %v", engine.NumDocsIndexed())
@@ -215,9 +203,6 @@ func (engine *Engine) Init(options types.EngineOpts) {
 
 	// 初始化索引器通道
 	engine.Indexer(options)
-
-	// 初始化排序器通道
-	//engine.Ranker(options)
 
 	// engine.CheckMem(engine.initOptions.UseStore)
 	engine.CheckMem()
@@ -240,14 +225,45 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	}
 }
 
-func (engine *Engine) StoreReBuild() {
+func (engine *Engine) StoreRecoverOneByOne() {
 
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		engine.indexers[shard].StoreReverseIndexOneTime()
-		engine.indexers[shard].StoreForwardIndexOneTime()
+		engine.indexers[shard].StoreRecoverReverseIndex(engine.initOptions.TokenNumber, nil)
+		engine.indexers[shard].StoreRecoverForwardIndex(engine.initOptions.DocNumber, nil)
 		engine.indexers[shard].StoreUpdateBegin()
 	}
+}
 
+
+func (engine *Engine) StoreRecoverConcurrent() {
+	wg := sync.WaitGroup{}
+	wg.Add(engine.initOptions.NumShards * 2)
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		go engine.indexers[shard].StoreRecoverForwardIndex(engine.initOptions.DocNumber, &wg)
+		go engine.indexers[shard].StoreRecoverReverseIndex(engine.initOptions.TokenNumber, &wg)
+		engine.indexers[shard].StoreUpdateBegin()
+	}
+	wg.Wait()
+}
+
+func (engine *Engine) StoreReBuildOneByOne() {
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		engine.indexers[shard].StoreReverseIndexOneTime(nil)
+		engine.indexers[shard].StoreForwardIndexOneTime(nil)
+		engine.indexers[shard].StoreUpdateBegin()
+	}
+}
+
+
+func (engine *Engine) StoreReBuildConcurrent() {
+	wg := sync.WaitGroup{}
+	wg.Add(engine.initOptions.NumShards)
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		go engine.indexers[shard].StoreForwardIndexOneTime(&wg)
+		go engine.indexers[shard].StoreReverseIndexOneTime(&wg)
+		engine.indexers[shard].StoreUpdateBegin()
+	}
+	wg.Wait()
 }
 
 // IndexDoc add the document to the index
@@ -321,18 +337,6 @@ func (engine *Engine) RemoveDoc(docId string, forceUpdate ...bool) error {
 	return nil
 }
 
-// // 获取文本的分词结果
-// func (engine *Engine) Tokens(text []byte) (tokens []string) {
-// 	querySegments := engine.segmenter.Segment(text)
-// 	for _, s := range querySegments {
-// 		token := s.Token().Text()
-// 		if !engine.stopTokens.IsStopToken(token) {
-// 			tokens = append(tokens, token)
-// 		}
-// 	}
-// 	return tokens
-// }
-
 // Segment get the word segmentation result of the text
 // 获取文本的分词结果, 只分词与过滤弃用词
 func (engine *Engine) Segment(content string) (keywords []string) {
@@ -396,20 +400,6 @@ func maxRankOutput(rankOpts types.RankOpts, rankLen int) (int, int) {
 	return start, end
 }
 
-//func (engine *Engine) rankOutID(rankerOutput rankerReturnReq, rankOutArr types.ScoredIDs) types.ScoredIDs {
-//	for _, doc := range rankerOutput.docs {
-//		rankOutArr = append(rankOutArr, doc)
-//	}
-//	return rankOutArr
-//}
-
-//func (engine *Engine) rankOutDocs(rankerOutput rankerReturnReq,
-//	rankOutArr types.ScoredDocs) types.ScoredDocs {
-//	for _, doc := range rankerOutput.docs.(types.ScoredDocs) {
-//		rankOutArr = append(rankOutArr, doc)
-//	}
-//	return rankOutArr
-//}
 
 // NotTimeOut not set engine timeout
 func (engine *Engine) NotTimeOut(request types.SearchReq, rankerReturnChan chan rankerReturnReq) (
@@ -543,26 +533,6 @@ func freeObjToPool(objarr [][]*types.ScoredID) {
 	return
 }
 
-// SearchDoc find the document that satisfies the search criteria.
-// This function is thread safe, return not IDonly
-//func (engine *Engine) SearchDoc(request types.SearchReq) (output types.SearchDoc) {
-//	resp := engine.Search(request)
-//	return types.SearchDoc{
-//		BaseResp: resp.BaseResp,
-//		Docs:     resp.Docs.(types.ScoredDocs),
-//	}
-//}
-
-// SearchID find the document that satisfies the search criteria.
-// This function is thread safe, return IDonly
-//func (engine *Engine) SearchID(request types.SearchReq) (output types.SearchID) {
-//	// return types.SearchID(engine.Search(request))
-//	resp := engine.Search(request)
-//	return types.SearchID{
-//		BaseResp: resp.BaseResp,
-//		Docs:     resp.Docs.(types.ScoredIDs),
-//	}
-//}
 
 // Search find the document that satisfies the search criteria.
 // This function is thread safe

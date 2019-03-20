@@ -85,12 +85,6 @@ func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitG
 	fields:=make(map[string]interface{},docNumber)
 	//自定义过滤器字段
 	fieldsFilter:=make(map[string]interface{},docNumber)
-	//var erropen error
-	//indexer.dbforwardIndex, erropen= store.OpenStore(dbPath, StoreEngine)
-	//if indexer.dbforwardIndex == nil || erropen != nil {
-	//	log.Fatal("Unable to open database ", dbPath, ": ", erropen)
-	//}
-	//defer indexer.dbforwardIndex.Close()
 	indexer.dbforwardIndex.ForEach(func(k, v []byte) error {
 		key, value := k, v
 		// 得到docID
@@ -132,7 +126,9 @@ func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitG
 	indexer.filterLock.fields=fieldsFilter
 	indexer.filterLock.Unlock()
 	log.Printf("indexer%v forwardindex recover finish",indexer.shardNumber)
-	wg.Done()
+	if wg!=nil {
+		wg.Done()
+	}
 }
 
 
@@ -142,12 +138,6 @@ func (indexer *Indexer)StoreRecoverReverseIndex(tokenNumber uint64, wg *sync.Wai
 	if indexer.dbRevertIndex==nil {
 		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
 	}
-	//var erropen error
-	//indexer.dbRevertIndex,erropen=store.OpenStore(dbPath,StoreEngine)
-	//if indexer.dbRevertIndex==nil||erropen!=nil {
-	//	log.Fatal("Unable to open database ", dbPath, ": ", erropen)
-	//}
-	//defer indexer.dbRevertIndex.Close()
 	indexer.dbRevertIndex.ForEach(func(k, v []byte) error {
 		key, value := k, v
 		// 得到docID
@@ -181,12 +171,15 @@ func (indexer *Indexer)StoreRecoverReverseIndex(tokenNumber uint64, wg *sync.Wai
 	indexer.tableLock.table=table
 	indexer.tableLock.Unlock()
 	log.Printf("indexer%v reverseindex recover finish",indexer.shardNumber)
-	wg.Done()
+	if wg!=nil {
+		wg.Done()
+	}
+
 }
 
 
 //系统启动时rebuild索引
-func (indexer *Indexer)StoreForwardIndexOneTime()  {
+func (indexer *Indexer)StoreForwardIndexOneTime(wg *sync.WaitGroup)  {
 	if indexer.dbforwardIndex==nil {
 		log.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
 	}
@@ -209,14 +202,12 @@ func (indexer *Indexer)StoreForwardIndexOneTime()  {
 		indexer.dbforwardIndex.Set([]byte(DocId), buf.Bytes())
 		atomic.AddUint64(&indexer.numDocsStore, 1)
 	}
-	//wg.Done()
+	if wg!=nil {
+		wg.Done()
+	}
 }
 
-func (indexer *Indexer)StoreUpdateBegin()  {
-	indexer.storeUpdateBegin=true
-}
-
-func (indexer *Indexer)StoreReverseIndexOneTime()  {
+func (indexer *Indexer)StoreReverseIndexOneTime(wg *sync.WaitGroup)  {
 	if indexer.dbRevertIndex==nil {
 		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
 	}
@@ -230,8 +221,13 @@ func (indexer *Indexer)StoreReverseIndexOneTime()  {
 		})
 		indexer.dbRevertIndex.Set([]byte(Token),buf.Bytes())
 	}
+	if wg!=nil {
+		wg.Done()
+	}
+}
 
-	//wg.Done()
+func (indexer *Indexer)StoreUpdateBegin()  {
+	indexer.storeUpdateBegin=true
 }
 
 
