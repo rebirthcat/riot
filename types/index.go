@@ -31,9 +31,10 @@ type DocIndex struct {
 	// Keywords 加入的索引键
 	Keywords []KeywordIndex
 
-	Field  interface{}
+	//Field  interface{}
 
-	FieldFilter interface{}
+	Field *DocField
+	//FieldFilter interface{}
 }
 
 
@@ -118,8 +119,24 @@ func (docs DocsId) Less(i, j int) bool {
 	return docs[i] < docs[j]
 }
 
-type DocField struct {
-	DocTokenLen int
-	ScoreField interface{}
-	FilterField interface{}
+//type DocField struct {
+//	DocTokenLen int
+//	GeoHash     string
+//	Lat         float64
+//	Lng         float64
+//	ScoreField interface{}
+//	FilterField interface{}
+//}
+
+type DocFieldSerialization interface {
+	Size() (s uint64)
+	Marshal(buf []byte) ([]byte, error)
+	Unmarshal(buf []byte) (uint64, error)
 }
+
+
+
+
+
+
+

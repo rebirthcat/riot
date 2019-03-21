@@ -13,3 +13,12 @@
 // under the License.
 
 package geo
+
+//type GeoFilter struct {
+//	geohashmap map[string]bool
+//}
+//
+//func (filter *GeoFilter)GeoFilter(geohash string) bool {
+//	_,isExist:=filter.geohashmap[geohash]
+//	return isExist
+//}

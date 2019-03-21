@@ -12,22 +12,22 @@ import (
 
 
 //系统重启时从持久化文件中读出来的一行数据所反序列化得到的类型
-type StoreForwardIndex struct {
-	//用于恢复docTokenLens map[string]float32
-	TokenLen float32
-	//用于恢复ranker的排序字段field
-	Field interface{}
-	FieldFilter interface{}
-}
+//type StoreForwardIndex struct {
+//	//用于恢复docTokenLens map[string]float32
+//	TokenLen float32
+//	//用于恢复ranker的排序字段field
+//	Field interface{}
+//	FieldFilter interface{}
+//}
 
-type StoreForwardIndexReq struct {
-	DocID string
-	Remove bool
-	DocTokenLen float32
-	Field interface{}
-	FieldFilter interface{}
-
-}
+//type StoreForwardIndexReq struct {
+//	DocID string
+//	Remove bool
+//	DocTokenLen float32
+//	Field interface{}
+//	FieldFilter interface{}
+//
+//}
 
 type StoreReverseIndex struct {
 	DocIds []string

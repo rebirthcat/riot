@@ -1,0 +1,7 @@
+struct DocField {
+
+    GeoHash    string
+    Lat        float64
+    Lng        float64
+
+}

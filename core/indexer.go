@@ -20,8 +20,7 @@ Package core is riot core
 package core
 
 import (
-	"bytes"
-	"encoding/gob"
+
 	"github.com/rebirthcat/riot/store"
 	"log"
 	"math"
@@ -52,7 +51,7 @@ type Indexer struct {
 		totalTokenLen float32
 
 		// 每个文档的关键词长度
-		//docTokenLens map[string]float32
+		docTokenLens map[string]float32
 	}
 	//b
 	addCacheLock struct {
@@ -137,6 +136,8 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex st
 
 	indexer.tableLock.table = make(map[string]*KeywordIndices,tokenNumber)
 	indexer.tableLock.docsState = make(map[string]int,docNumber)
+	indexer.tableLock.docTokenLens= make(map[string]float32,docNumber)
+
 	indexer.addCacheLock.addCache = make(
 		[]*types.DocIndex, indexer.initOptions.DocCacheSize)
 
@@ -269,20 +270,15 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			continue
 		}
 
-		//将文档的排序字段和自定义评分字段落盘，存储到boltdb中
-		field:=types.DocField{
-			ScoreField:doc.Field,
-			FilterField:doc.FieldFilter,
-		}
 		if indexer.initOptions.IndexType!=types.DocIdsIndex {
+			indexer.tableLock.docTokenLens[doc.DocId]=doc.TokenLen
 			indexer.tableLock.totalTokenLen += doc.TokenLen
-			field.DocTokenLen=int(doc.TokenLen)
 		}
 
-		buf:=bytes.Buffer{}
-		enc:=gob.NewEncoder(&buf)
-		enc.Encode(field)
-		indexer.dbforwardIndex.Set([]byte(doc.DocId),buf.Bytes())
+		//将文档的排序字段和自定义评分字段落盘，存储到boltdb中
+		docfield:=doc.Field
+		fieldbuf,_:=docfield.Marshal(nil)
+		indexer.dbforwardIndex.Set([]byte(doc.DocId),fieldbuf)
 
 		var timer *time.Timer
 		docIdIsNew := true
@@ -414,17 +410,14 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 
 	// 更新文档关键词总长度，删除文档状态
 	for _, docId := range *docs {
+		//删除内存状态
 		delete(indexer.tableLock.docsState, docId)
+		//更新内存中对应docid的关键词长度
 		if indexer.initOptions.IndexType!=types.DocIdsIndex {
-			if forwardindexBuf,errget:=indexer.dbforwardIndex.Get([]byte(docId));errget!=nil {
-				buf:=bytes.NewReader(forwardindexBuf)
-				dec:=gob.NewDecoder(buf)
-				var docField types.DocField
-				if errdec:=dec.Decode(&docField);errdec!=nil{
-					indexer.tableLock.totalTokenLen -= float32(docField.DocTokenLen)
-				}
-			}
+			indexer.tableLock.totalTokenLen -= indexer.tableLock.docTokenLens[docId]
+			delete(indexer.tableLock.docTokenLens, docId)
 		}
+		//删除磁盘中docid对应的用户自定义排序字段和过滤字段
 		indexer.dbforwardIndex.Delete([]byte(docId))
 	}
 	var timer *time.Timer
@@ -608,16 +601,11 @@ func (indexer *Indexer) internalLookup(
 			if errdbget!=nil {
 				continue
 			}
-			buf:=bytes.NewReader(forwardIndexBuf)
-			dec:=gob.NewDecoder(buf)
-			var docField types.DocField
-			errdec:=dec.Decode(&docField)
-			if errdec!=nil {
-				continue
-			}
-
+			docfield:=types.DocField{}
+			docfield.Unmarshal(forwardIndexBuf)
+			//geohashfilter
 			if filter!=nil {
-				if !filter.Filter(docField.FilterField) {
+				if !filter.Filter(docfield.GeoHash) {
 					continue
 				}
 			}
@@ -667,7 +655,7 @@ func (indexer *Indexer) internalLookup(
 				bm25 := float32(0)
 				if indexer.initOptions.IndexType == types.LocsIndex ||
 					indexer.initOptions.IndexType == types.FrequenciesIndex {
-					d := float32(docField.DocTokenLen)
+					d := indexer.tableLock.docTokenLens[baseDocId]
 					for i, t := range table[:len(tokens)] {
 						var frequency float32
 						if indexer.initOptions.IndexType == types.LocsIndex {
@@ -691,7 +679,7 @@ func (indexer *Indexer) internalLookup(
 			}else {
 				//用户自定义评分规则，分数小于0则剔除
 				if ok {
-					scores:=scoringCriteria.Score(docField.ScoreField)
+					scores:=scoringCriteria.Score(docfield.Lat,docfield.Lng)
 					if scores<0 {
 						continue
 					}

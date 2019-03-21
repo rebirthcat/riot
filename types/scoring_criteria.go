@@ -18,7 +18,7 @@ package types
 // ScoringCriteria 评分规则通用接口
 type ScoringCriteria interface {
 
-	Score(fields interface{}) float32
+	Score(Lat float64,Lng float64) float32
 }
 
 //// RankByBM25 一个简单的评分规则，文档分数为BM25
