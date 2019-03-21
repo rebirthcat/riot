@@ -20,6 +20,8 @@ Package core is riot core
 package core
 
 import (
+	"bytes"
+	"encoding/gob"
 	"github.com/rebirthcat/riot/store"
 	"log"
 	"math"
@@ -50,7 +52,7 @@ type Indexer struct {
 		totalTokenLen float32
 
 		// 每个文档的关键词长度
-		docTokenLens map[string]float32
+		//docTokenLens map[string]float32
 	}
 	//b
 	addCacheLock struct {
@@ -64,18 +66,6 @@ type Indexer struct {
 		removeCachePointer int
 		removeCache        types.DocsId
 	}
-	//排序字段
-	rankerLock struct {
-		sync.RWMutex
-		fields map[string]interface{}
-		//docs   map[string]bool
-	}
-	//过滤字段
-	filterLock struct{
-		sync.RWMutex
-		fields map[string]interface{}
-	}
-
 
 	initOptions types.IndexerOpts
 	initialized bool
@@ -86,7 +76,7 @@ type Indexer struct {
 	//正向索引持久化静态恢复接口
 	dbforwardIndex  store.Store
 	//正向索引持久化动态更新管道
-	storeUpdateForwardIndexChan    chan StoreForwardIndexReq
+	//storeUpdateForwardIndexChan    chan StoreForwardIndexReq
 	//反向索引持久化静态恢复接口
 	dbRevertIndex   store.Store
 	//反向索引持久化动态更新管道
@@ -135,7 +125,9 @@ func (indexer *Indexer)GetNumTotalTokenLen()uint64  {
 
 
 // Init 初始化索引器
-func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex string,dbPathReverseIndex string,StoreEngine string, docNumber uint64,tokenNumber uint64,options types.IndexerOpts) {
+func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex string,dbPathReverseIndex string,
+	ForwarIndexStoreEngine string,ReverseIndexStoreEngine string, docNumber uint64,tokenNumber uint64,
+	options types.IndexerOpts) {
 	if indexer.initialized == true {
 		log.Fatal("The Indexer can not be initialized twice.")
 	}
@@ -150,24 +142,16 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex st
 
 	indexer.removeCacheLock.removeCache = make(
 		[]string, indexer.initOptions.DocCacheSize)
-	indexer.tableLock.docTokenLens = make(map[string]float32,docNumber)
-
-	//初始化该索引器里对应的排序所用的字段
-	indexer.rankerLock.fields=make(map[string]interface{},docNumber)
-	//初始化该索引器里对应的过滤器所用的字段
-	indexer.filterLock.fields=make(map[string]interface{},docNumber)
-
-	indexer.storeUpdateForwardIndexChan=make(chan StoreForwardIndexReq,StoreChanBufLen)
 	indexer.storeUpdateReverseIndexChan=make(chan StoreReverseIndexReq,StoreChanBufLen)
 	indexer.shardNumber=shard
 
 	var erropen error
-	indexer.dbforwardIndex, erropen= store.OpenStore(dbPathForwardIndex, StoreEngine)
+	indexer.dbforwardIndex, erropen= store.OpenStore(dbPathForwardIndex, ForwarIndexStoreEngine)
 	if indexer.dbforwardIndex == nil || erropen != nil {
 		log.Fatal("Unable to open database ", dbPathForwardIndex, ": ", erropen)
 	}
 
-	indexer.dbRevertIndex,erropen=store.OpenStore(dbPathReverseIndex,StoreEngine)
+	indexer.dbRevertIndex,erropen=store.OpenStore(dbPathReverseIndex,ReverseIndexStoreEngine)
 	if indexer.dbRevertIndex==nil||erropen!=nil {
 		log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", erropen)
 	}
@@ -285,41 +269,22 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			continue
 		}
 
-		//更新排序字段
-		indexer.rankerLock.Lock()
-		indexer.rankerLock.fields[doc.DocId] = doc.Field
-		indexer.rankerLock.Unlock()
-		//更新过滤字段
-		indexer.filterLock.Lock()
-		indexer.filterLock.fields[doc.DocId]=doc.FieldFilter
-		indexer.filterLock.Unlock()
-
+		//将文档的排序字段和自定义评分字段落盘，存储到boltdb中
+		field:=types.DocField{
+			ScoreField:doc.Field,
+			FilterField:doc.FieldFilter,
+		}
 		if indexer.initOptions.IndexType!=types.DocIdsIndex {
-			indexer.tableLock.docTokenLens[doc.DocId] = float32(doc.TokenLen)
 			indexer.tableLock.totalTokenLen += doc.TokenLen
+			field.DocTokenLen=int(doc.TokenLen)
 		}
+
+		buf:=bytes.Buffer{}
+		enc:=gob.NewEncoder(&buf)
+		enc.Encode(field)
+		indexer.dbforwardIndex.Set([]byte(doc.DocId),buf.Bytes())
+
 		var timer *time.Timer
-		if indexer.storeUpdateBegin {
-			storeforwardreq:=StoreForwardIndexReq{
-				DocID:doc.DocId,
-				Remove:false,
-				Field:doc.Field,
-				FieldFilter:doc.FieldFilter,
-			}
-			// 更新文档关键词总长度
-			if indexer.initOptions.IndexType!=types.DocIdsIndex {
-				storeforwardreq.DocTokenLen=doc.TokenLen
-			}
-
-			timer = time.NewTimer(time.Millisecond * 100)
-			select {
-			case indexer.storeUpdateForwardIndexChan <- storeforwardreq:
-				//log
-			case <-timer.C:
-				log.Println("timeout")
-			}
-		}
-
 		docIdIsNew := true
 		for _, keyword := range doc.Keywords {
 			indices, foundKeyword := indexer.tableLock.table[keyword.Text]
@@ -360,7 +325,10 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indices.docIds = append(indices.docIds, "0")
 			copy(indices.docIds[position+1:], indices.docIds[position:])
 			indices.docIds[position] = doc.DocId
-
+			//加这个判断的目的是为了在系统冷启动（重建索引并启动）时，等所有的索引建立完毕之后，一次性的将反向索引持久化
+			//目的是为了减少冷启动过程中持久化次数，减少gob序列化次数，从而达到减少内存消耗的目的，遏制在冷启动过程中内存使用数量远高于系统稳定运行时的内存使用数量
+			//副作用 1 用户在冷启动过程中重建完索引后需要调用engin.FlushStore()手动将反向索引一次性持久化，因为引擎本身无法预知用户在冷启动过程中什么时候完成索引的建立
+			//		2 如果冷启动过程中出现错误，之前启动过程中建立在内存中的索引结构无法恢复，必须重新启动重新建立
 			if indexer.storeUpdateBegin {
 				storereversereq:=StoreReverseIndexReq{}
 				storereversereq.Token=keyword.Text
@@ -391,6 +359,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 	}
 
 }
+
 
 // RemoveDocToCache 向 REMOVECACHE 中加入一个待删除文档
 // 返回值表示文档是否在索引表中被删除
@@ -444,36 +413,21 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 	defer indexer.tableLock.Unlock()
 
 	// 更新文档关键词总长度，删除文档状态
-	var timer *time.Timer
 	for _, docId := range *docs {
-
-		indexer.rankerLock.Lock()
-		delete(indexer.rankerLock.fields,docId)
-		indexer.rankerLock.Unlock()
-
-		indexer.filterLock.Lock()
-		delete(indexer.filterLock.fields,docId)
-		indexer.filterLock.Unlock()
-
-		if indexer.initOptions.IndexType!=types.DocIdsIndex {
-			indexer.tableLock.totalTokenLen -= indexer.tableLock.docTokenLens[docId]
-			delete(indexer.tableLock.docTokenLens, docId)
-		}
 		delete(indexer.tableLock.docsState, docId)
-		storeforwardreq:=StoreForwardIndexReq{
-			DocID:docId,
-			Remove:true,
+		if indexer.initOptions.IndexType!=types.DocIdsIndex {
+			if forwardindexBuf,errget:=indexer.dbforwardIndex.Get([]byte(docId));errget!=nil {
+				buf:=bytes.NewReader(forwardindexBuf)
+				dec:=gob.NewDecoder(buf)
+				var docField types.DocField
+				if errdec:=dec.Decode(&docField);errdec!=nil{
+					indexer.tableLock.totalTokenLen -= float32(docField.DocTokenLen)
+				}
+			}
 		}
-		//持久化
-		timer=time.NewTimer(time.Millisecond*100)
-		select {
-		case indexer.storeUpdateForwardIndexChan<-storeforwardreq:
-			//log.Println("a forwardindex is send to remove")
-		case <-timer.C:
-			log.Println("timeout")
-		}
+		indexer.dbforwardIndex.Delete([]byte(docId))
 	}
-
+	var timer *time.Timer
 	for keyword, indices := range indexer.tableLock.table {
 		indicesTop, indicesPointer := 0, 0
 		docsPointer := sort.Search(
@@ -649,11 +603,21 @@ func (indexer *Indexer) internalLookup(
 			if !ok || docState != 0 {
 				continue
 			}
+
+			forwardIndexBuf,errdbget:=indexer.dbforwardIndex.Get([]byte(baseDocId))
+			if errdbget!=nil {
+				continue
+			}
+			buf:=bytes.NewReader(forwardIndexBuf)
+			dec:=gob.NewDecoder(buf)
+			var docField types.DocField
+			errdec:=dec.Decode(&docField)
+			if errdec!=nil {
+				continue
+			}
+
 			if filter!=nil {
-				indexer.filterLock.RLock()
-				filterfield:=indexer.filterLock.fields[baseDocId]
-				indexer.filterLock.RUnlock()
-				if !filter.Filter(filterfield) {
+				if !filter.Filter(docField.FilterField) {
 					continue
 				}
 			}
@@ -703,7 +667,7 @@ func (indexer *Indexer) internalLookup(
 				bm25 := float32(0)
 				if indexer.initOptions.IndexType == types.LocsIndex ||
 					indexer.initOptions.IndexType == types.FrequenciesIndex {
-					d := indexer.tableLock.docTokenLens[baseDocId]
+					d := float32(docField.DocTokenLen)
 					for i, t := range table[:len(tokens)] {
 						var frequency float32
 						if indexer.initOptions.IndexType == types.LocsIndex {
@@ -726,11 +690,8 @@ func (indexer *Indexer) internalLookup(
 				indexedDoc.Scores = float32(bm25)
 			}else {
 				//用户自定义评分规则，分数小于0则剔除
-				indexer.rankerLock.RLock()
-				fs,ok:=indexer.rankerLock.fields[indexedDoc.DocId]
-				indexer.rankerLock.RUnlock()
 				if ok {
-					scores:=scoringCriteria.Score(fs)
+					scores:=scoringCriteria.Score(docField.ScoreField)
 					if scores<0 {
 						continue
 					}

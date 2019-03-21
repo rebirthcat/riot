@@ -117,3 +117,9 @@ func (docs DocsId) Swap(i, j int) {
 func (docs DocsId) Less(i, j int) bool {
 	return docs[i] < docs[j]
 }
+
+type DocField struct {
+	DocTokenLen int
+	ScoreField interface{}
+	FilterField interface{}
+}
