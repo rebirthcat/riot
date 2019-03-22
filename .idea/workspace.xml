@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="2fbc9772-db50-4de1-9d0c-f15b55a06ee8" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/engine.go" beforeDir="false" afterPath="$PROJECT_DIR$/engine.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/core/indexer.go" beforeDir="false" afterPath="$PROJECT_DIR$/core/indexer.go" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -33,7 +33,7 @@
           <entry key="LICENSE" value="1" />
           <entry key="docfield_schema" value="1" />
           <entry key="gitignore" value="1" />
-          <entry key="go" value="681" />
+          <entry key="go" value="682" />
           <entry key="md" value="5" />
           <entry key="mod" value="9" />
           <entry key="schema" value="2" />
@@ -47,7 +47,7 @@
       <usages-collector id="statistics.file.types.open">
         <counts>
           <entry key="DTD" value="9" />
-          <entry key="Go" value="681" />
+          <entry key="Go" value="682" />
           <entry key="Markdown" value="5" />
           <entry key="PLAIN_TEXT" value="15" />
           <entry key="SVG" value="4" />
@@ -57,7 +57,7 @@
       <usages-collector id="statistics.file.extensions.edit">
         <counts>
           <entry key="docfield_schema" value="118" />
-          <entry key="go" value="24106" />
+          <entry key="go" value="24109" />
           <entry key="mod" value="45" />
           <entry key="schema" value="30" />
         </counts>
@@ -65,7 +65,7 @@
       <usages-collector id="statistics.file.types.edit">
         <counts>
           <entry key="DTD" value="45" />
-          <entry key="Go" value="24106" />
+          <entry key="Go" value="24109" />
           <entry key="PLAIN_TEXT" value="148" />
         </counts>
       </usages-collector>
@@ -91,11 +91,20 @@
           </provider>
         </entry>
       </file>
-      <file pinned="false" current-in-tab="true">
+      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/engine.go">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="77">
-              <caret line="104" lean-forward="true" selection-start-line="104" selection-end-line="104" />
+              <caret line="104" selection-start-line="104" selection-end-line="104" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/core/indexer.go">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="162">
+              <caret line="626" column="12" selection-start-line="626" selection-start-column="12" selection-end-line="626" selection-end-column="12" />
             </state>
           </provider>
         </entry>
@@ -194,8 +203,8 @@
         <option value="$PROJECT_DIR$/indexer_worker.go" />
         <option value="$PROJECT_DIR$/segment.go" />
         <option value="$PROJECT_DIR$/types/engine_init_options.go" />
-        <option value="$PROJECT_DIR$/core/indexer.go" />
         <option value="$PROJECT_DIR$/engine.go" />
+        <option value="$PROJECT_DIR$/core/indexer.go" />
       </list>
     </option>
   </component>
@@ -225,6 +234,11 @@
             <path>
               <item name="riot" type="b2602c69:ProjectViewProjectNode" />
               <item name="riot" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="riot" type="b2602c69:ProjectViewProjectNode" />
+              <item name="riot" type="462c0819:PsiDirectoryNode" />
+              <item name="core" type="462c0819:PsiDirectoryNode" />
             </path>
             <path>
               <item name="riot" type="b2602c69:ProjectViewProjectNode" />
@@ -276,7 +290,7 @@
     <frame x="0" y="0" width="1920" height="1039" extended-state="6" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.28975454" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.28975454" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
@@ -288,7 +302,7 @@
       <window_info anchor="bottom" id="TODO" order="6" />
       <window_info anchor="bottom" id="Database Changes" order="7" show_stripe_button="false" />
       <window_info anchor="bottom" id="Version Control" order="8" weight="0.3292683" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="9" visible="true" weight="0.3292683" />
+      <window_info anchor="bottom" id="Terminal" order="9" visible="true" weight="0.3292683" />
       <window_info anchor="bottom" id="Event Log" order="10" side_tool="true" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
@@ -636,16 +650,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/core/indexer.go">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-1422">
-          <caret line="141" column="52" selection-start-line="141" selection-start-column="52" selection-end-line="141" selection-end-column="52" />
-          <folding>
-            <element signature="e#663#836#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/types/filter_criteria.go">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="252">
@@ -677,7 +681,14 @@
     <entry file="file://$PROJECT_DIR$/engine.go">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="77">
-          <caret line="104" lean-forward="true" selection-start-line="104" selection-end-line="104" />
+          <caret line="104" selection-start-line="104" selection-end-line="104" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/core/indexer.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="162">
+          <caret line="626" column="12" selection-start-line="626" selection-start-column="12" selection-end-line="626" selection-end-column="12" />
         </state>
       </provider>
     </entry>

@@ -619,15 +619,17 @@ func (indexer *Indexer) internalLookup(
 		}
 
 		if found {
-			docState, ok := indexer.tableLock.docsState[baseDocId]
-			if !ok || docState != 0 {
-				continue
-			}
 			if geoFilter!=nil {
 				if !geoFilter.Filter(indexer.tableLock.forwardtable[baseDocId].GeoHash) {
 					continue
 				}
 			}
+
+			docState, ok := indexer.tableLock.docsState[baseDocId]
+			if !ok || docState != 0 {
+				continue
+			}
+
 
 			indexedDoc,_:=types.ScoreIDPool.Get().(*types.ScoredID)
 			indexedDoc.DocId = baseDocId
