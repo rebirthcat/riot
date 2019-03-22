@@ -175,7 +175,6 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		}
 	}
 	log.Println("index recover finish")
-	log.Printf("store number is %v", engine.NumDocsIndexedStore())
 	log.Printf("document number is %v", engine.NumDocsIndexed())
 	log.Printf("tokens number is %v", engine.NumTokensAdded())
 	// 初始化分词器通道
