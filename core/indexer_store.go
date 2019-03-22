@@ -4,7 +4,6 @@ import (
 	"github.com/rebirthcat/riot/store"
 	"log"
 	"sync"
-	"sync/atomic"
 )
 
 
@@ -67,7 +66,7 @@ func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitG
 		return nil
 	})
 	//恢复indexer 中tableLock部分字段
-	log.Printf("indexer%v forwardindex recover finish:",indexer.shardNumber)
+	log.Printf("indexer%v forwardindex recover finish",indexer.shardNumber)
 	if wg!=nil {
 		wg.Done()
 	}
@@ -103,7 +102,7 @@ func (indexer *Indexer)StoreForwardIndexOneTime(wg *sync.WaitGroup)  {
 
 		buf,_:=docField.Marshal(nil)
 		indexer.dbforwardIndex.Set([]byte(docId), buf)
-		atomic.AddUint64(&indexer.numDocsStore, 1)
+		//atomic.AddUint64(&indexer.numDocsStore, 1)
 	}
 	if wg!=nil {
 		wg.Done()
@@ -139,12 +138,12 @@ func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
 	 	//如果传过来的持久化请求中的DocTokenLen小于0,则是删除请求，即从RemoveDocs（）函数中传过来的
 	 	if request.Remove {
 	 		indexer.dbforwardIndex.Delete([]byte(request.DocID))
-	 		atomic.AddUint64(&indexer.numDocsStore,^uint64(1-1))
+	 		//atomic.AddUint64(&indexer.numDocsStore,^uint64(1-1))
 	 		continue
 	 	}else {
 			buf,_:=request.Field.Marshal(nil)
 			indexer.dbforwardIndex.Set([]byte(request.DocID), buf)
-			atomic.AddUint64(&indexer.numDocsStore, 1)
+			//atomic.AddUint64(&indexer.numDocsStore, 1)
 		}
 	}
 }

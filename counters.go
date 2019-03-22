@@ -33,10 +33,10 @@ func (engine *Engine) NumDocsIndexed() uint64 {
 	return num
 }
 
-func (engine *Engine) NumDocsIndexedStore() uint64 {
-	var num uint64
-	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		num += engine.indexers[shard].GetNumDocsStore()
-	}
-	return num
-}
+//func (engine *Engine) NumDocsIndexedStore() uint64 {
+//	var num uint64
+//	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+//		num += engine.indexers[shard].GetNumDocsStore()
+//	}
+//	return num
+//}

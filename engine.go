@@ -571,7 +571,7 @@ func (engine *Engine) Close() {
 	engine.Flush()
 	//time.Sleep(time.Second*300)
 	for i, indexer := range engine.indexers {
-		log.Printf("indexer %v :document number is %v,reverse index table len is %v", i, indexer.GetNumDocsStore(), indexer.GetTableLen())
+		log.Printf("indexer %v :document number is %v,reverse index table len is %v", i, indexer.GetNumDocs(), indexer.GetTableLen())
 	}
 	for _, indexer := range engine.indexers {
 		dbf := indexer.GetForwardIndexDB()

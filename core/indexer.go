@@ -27,7 +27,6 @@ import (
 	"math"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/rebirthcat/riot/types"
@@ -84,7 +83,7 @@ type Indexer struct {
 	//反向索引持久化动态更新管道
 	storeUpdateReverseIndexChan    chan StoreReverseIndexReq
 	//表示保存在持久化文件中的文档树量(因为该值只做统计使用，不参与搜索的bm25的计算，所以不适合放到tableLock里)
-	numDocsStore	uint64
+	//numDocsStore	uint64
 }
 
 // KeywordIndices 反向索引表的一行，收集了一个搜索键出现的所有文档，按照DocId从小到大排序。
@@ -115,9 +114,9 @@ func (indexer *Indexer)GetTableLen()uint64  {
 	return uint64(len(indexer.tableLock.table))
 }
 
-func (indexer *Indexer)GetNumDocsStore() uint64 {
-	return atomic.LoadUint64(&indexer.numDocsStore)
-}
+//func (indexer *Indexer)GetNumDocsStore() uint64 {
+//	return atomic.LoadUint64(&indexer.numDocsStore)
+//}
 
 //a
 func (indexer *Indexer)GetNumDocs()uint64  {
