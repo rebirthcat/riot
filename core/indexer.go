@@ -20,7 +20,8 @@ Package core is riot core
 package core
 
 import (
-
+	"github.com/rebirthcat/riot/distscore"
+	"github.com/rebirthcat/riot/geofilter"
 	"github.com/rebirthcat/riot/store"
 	"log"
 	"math"
@@ -42,6 +43,7 @@ type Indexer struct {
 	tableLock struct {
 		sync.RWMutex
 		table     map[string]*KeywordIndices
+		forwardtable map[string] *DocField
 		docsState map[string]int // nil: 表示无状态记录，0: 存在于索引中，1: 等待删除，2: 等待加入
 		// 单个分片的文档总数（精确值）
 		numDocs uint64
@@ -51,7 +53,7 @@ type Indexer struct {
 		totalTokenLen float32
 
 		// 每个文档的关键词长度
-		docTokenLens map[string]float32
+		//docTokenLens map[string]float32
 	}
 	//b
 	addCacheLock struct {
@@ -66,6 +68,7 @@ type Indexer struct {
 		removeCache        types.DocsId
 	}
 
+
 	initOptions types.IndexerOpts
 	initialized bool
 
@@ -75,7 +78,7 @@ type Indexer struct {
 	//正向索引持久化静态恢复接口
 	dbforwardIndex  store.Store
 	//正向索引持久化动态更新管道
-	//storeUpdateForwardIndexChan    chan StoreForwardIndexReq
+	storeUpdateForwardIndexChan    chan StoreForwardIndexReq
 	//反向索引持久化静态恢复接口
 	dbRevertIndex   store.Store
 	//反向索引持久化动态更新管道
@@ -85,12 +88,19 @@ type Indexer struct {
 }
 
 // KeywordIndices 反向索引表的一行，收集了一个搜索键出现的所有文档，按照DocId从小到大排序。
-type KeywordIndices struct {
-	// 下面的切片是否为空，取决于初始化时IndexType的值
-	docIds      []string  // 全部类型都有
-	frequencies []float32 // IndexType == FrequenciesIndex
-	locations   [][]int   // IndexType == LocsIndex
-}
+//type KeywordIndices struct {
+//	// 下面的切片是否为空，取决于初始化时IndexType的值
+//	docIds      []string  // 全部类型都有
+//	frequencies []float32 // IndexType == FrequenciesIndex
+//	locations   [][]int   // IndexType == LocsIndex
+//}
+
+//type DocField struct {
+//	DocTokenLen float32
+//	GeoHash    string
+//	Lat       float64
+//	Lng       float64
+//}
 
 func (indexer *Indexer) Flush(wg *sync.WaitGroup) {
 	indexer.AddDocToCache(nil,true)
@@ -124,9 +134,7 @@ func (indexer *Indexer)GetNumTotalTokenLen()uint64  {
 
 
 // Init 初始化索引器
-func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex string,dbPathReverseIndex string,
-	ForwarIndexStoreEngine string,ReverseIndexStoreEngine string, docNumber uint64,tokenNumber uint64,
-	options types.IndexerOpts) {
+func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex string,dbPathReverseIndex string,StoreEngine string, docNumber uint64,tokenNumber uint64,options types.IndexerOpts) {
 	if indexer.initialized == true {
 		log.Fatal("The Indexer can not be initialized twice.")
 	}
@@ -136,23 +144,25 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex st
 
 	indexer.tableLock.table = make(map[string]*KeywordIndices,tokenNumber)
 	indexer.tableLock.docsState = make(map[string]int,docNumber)
-	indexer.tableLock.docTokenLens= make(map[string]float32,docNumber)
+	indexer.tableLock.forwardtable=make(map[string]*DocField,docNumber)
 
 	indexer.addCacheLock.addCache = make(
 		[]*types.DocIndex, indexer.initOptions.DocCacheSize)
 
 	indexer.removeCacheLock.removeCache = make(
 		[]string, indexer.initOptions.DocCacheSize)
+
+	indexer.storeUpdateForwardIndexChan=make(chan StoreForwardIndexReq,StoreChanBufLen)
 	indexer.storeUpdateReverseIndexChan=make(chan StoreReverseIndexReq,StoreChanBufLen)
 	indexer.shardNumber=shard
 
 	var erropen error
-	indexer.dbforwardIndex, erropen= store.OpenStore(dbPathForwardIndex, ForwarIndexStoreEngine)
+	indexer.dbforwardIndex, erropen= store.OpenStore(dbPathForwardIndex, StoreEngine)
 	if indexer.dbforwardIndex == nil || erropen != nil {
 		log.Fatal("Unable to open database ", dbPathForwardIndex, ": ", erropen)
 	}
 
-	indexer.dbRevertIndex,erropen=store.OpenStore(dbPathReverseIndex,ReverseIndexStoreEngine)
+	indexer.dbRevertIndex,erropen=store.OpenStore(dbPathReverseIndex,StoreEngine)
 	if indexer.dbRevertIndex==nil||erropen!=nil {
 		log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", erropen)
 	}
@@ -270,17 +280,33 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			continue
 		}
 
-		if indexer.initOptions.IndexType!=types.DocIdsIndex {
-			indexer.tableLock.docTokenLens[doc.DocId]=doc.TokenLen
-			indexer.tableLock.totalTokenLen += doc.TokenLen
+		docfield:=&DocField{
+			GeoHash:doc.Geohash,
+			Lat:doc.Lat,
+			Lng:doc.Lng,
 		}
 
-		//将文档的排序字段和自定义评分字段落盘，存储到boltdb中
-		docfield:=doc.Field
-		fieldbuf,_:=docfield.Marshal(nil)
-		indexer.dbforwardIndex.Set([]byte(doc.DocId),fieldbuf)
-
+		if indexer.initOptions.IndexType!=types.DocIdsIndex {
+			docfield.DocTokenLen=doc.TokenLen
+			indexer.tableLock.totalTokenLen += doc.TokenLen
+		}
+		indexer.tableLock.forwardtable[doc.DocId]=docfield
 		var timer *time.Timer
+		if indexer.storeUpdateBegin {
+			storeforwardreq:=StoreForwardIndexReq{
+				DocID:doc.DocId,
+				Remove:false,
+				Field:docfield,
+			}
+			timer = time.NewTimer(time.Millisecond * 100)
+			select {
+			case indexer.storeUpdateForwardIndexChan <- storeforwardreq:
+				//log
+			case <-timer.C:
+				log.Println("timeout")
+			}
+		}
+
 		docIdIsNew := true
 		for _, keyword := range doc.Keywords {
 			indices, foundKeyword := indexer.tableLock.table[keyword.Text]
@@ -289,7 +315,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 				ti := KeywordIndices{}
 				switch indexer.initOptions.IndexType {
 				case types.LocsIndex:
-					ti.locations = [][]int{keyword.Starts}
+					ti.locations = [][]int32{keyword.Starts}
 				case types.FrequenciesIndex:
 					ti.frequencies = []float32{keyword.Frequency}
 				}
@@ -307,7 +333,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			switch indexer.initOptions.IndexType {
 			case types.LocsIndex:
 
-				indices.locations = append(indices.locations, []int{})
+				indices.locations = append(indices.locations, []int32{})
 				copy(indices.locations[position+1:], indices.locations[position:])
 				indices.locations[position] = keyword.Starts
 
@@ -321,18 +347,11 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indices.docIds = append(indices.docIds, "0")
 			copy(indices.docIds[position+1:], indices.docIds[position:])
 			indices.docIds[position] = doc.DocId
-			//加这个判断的目的是为了在系统冷启动（重建索引并启动）时，等所有的索引建立完毕之后，一次性的将反向索引持久化
-			//目的是为了减少冷启动过程中持久化次数，减少gob序列化次数，从而达到减少内存消耗的目的，遏制在冷启动过程中内存使用数量远高于系统稳定运行时的内存使用数量
-			//副作用 1 用户在冷启动过程中重建完索引后需要调用engin.FlushStore()手动将反向索引一次性持久化，因为引擎本身无法预知用户在冷启动过程中什么时候完成索引的建立
-			//		2 如果冷启动过程中出现错误，之前启动过程中建立在内存中的索引结构无法恢复，必须重新启动重新建立
+
 			if indexer.storeUpdateBegin {
 				storereversereq:=StoreReverseIndexReq{}
 				storereversereq.Token=keyword.Text
-				storereversereq.KeywordIndices.DocIds=indices.docIds
-				if indexer.initOptions.IndexType!=types.DocIdsIndex {
-					storereversereq.KeywordIndices.Frequencies=indices.frequencies
-					storereversereq.KeywordIndices.Locations=indices.locations
-				}
+				storereversereq.Indices=indices
 				//发送至持久化
 				if timer==nil {
 					timer=time.NewTimer(time.Millisecond*100)
@@ -355,7 +374,6 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 	}
 
 }
-
 
 // RemoveDocToCache 向 REMOVECACHE 中加入一个待删除文档
 // 返回值表示文档是否在索引表中被删除
@@ -409,18 +427,31 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 	defer indexer.tableLock.Unlock()
 
 	// 更新文档关键词总长度，删除文档状态
-	for _, docId := range *docs {
-		//删除内存状态
-		delete(indexer.tableLock.docsState, docId)
-		//更新内存中对应docid的关键词长度
-		if indexer.initOptions.IndexType!=types.DocIdsIndex {
-			indexer.tableLock.totalTokenLen -= indexer.tableLock.docTokenLens[docId]
-			delete(indexer.tableLock.docTokenLens, docId)
-		}
-		//删除磁盘中docid对应的用户自定义排序字段和过滤字段
-		indexer.dbforwardIndex.Delete([]byte(docId))
-	}
 	var timer *time.Timer
+	for _, docId := range *docs {
+		//先删除状态
+		delete(indexer.tableLock.docsState, docId)
+		//更新totalTokenLen
+		if indexer.initOptions.IndexType!=types.DocIdsIndex {
+			indexer.tableLock.totalTokenLen -= indexer.tableLock.forwardtable[docId].DocTokenLen
+		}
+		//删除正向索引
+		delete(indexer.tableLock.forwardtable,docId)
+		//发出删除的持久化请求
+		storeforwardreq:=StoreForwardIndexReq{
+			DocID:docId,
+			Remove:true,
+		}
+		//持久化
+		timer=time.NewTimer(time.Millisecond*100)
+		select {
+		case indexer.storeUpdateForwardIndexChan<-storeforwardreq:
+			//log.Println("a forwardindex is send to remove")
+		case <-timer.C:
+			log.Println("timeout")
+		}
+	}
+
 	for keyword, indices := range indexer.tableLock.table {
 		indicesTop, indicesPointer := 0, 0
 		docsPointer := sort.Search(
@@ -474,13 +505,9 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 
 		}
 
-		storereversereq:=StoreReverseIndexReq{}
-		storereversereq.Token=keyword
-		storereversereq.KeywordIndices.DocIds=indices.docIds
-
-		if indexer.initOptions.IndexType!=types.DocIdsIndex {
-			storereversereq.KeywordIndices.Frequencies=indices.frequencies
-			storereversereq.KeywordIndices.Locations=indices.locations
+		storereversereq:=StoreReverseIndexReq{
+			Token:keyword,
+			Indices:indices,
 		}
 		//持久化
 		if timer == nil {
@@ -503,8 +530,8 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 // 当 docIds 不为 nil 时仅从 docIds 指定的文档中查找
 //a
 func (indexer *Indexer) Lookup(
-	tokens, labels []string, docIds map[string]bool, countDocsOnly bool, scoringCriteria  types.ScoringCriteria,
-	filter types.FilterCriteria,orderReverse bool) (scoredIDs []*types.ScoredID, numDocs int) {
+	tokens, labels []string, docIds map[string]bool, countDocsOnly bool, distScoreCriteria distscore.DistScoreCriteria,
+	geoFilter geofilter.GeoFilterCriteria,orderReverse bool) (scoredIDs []*types.ScoredID, numDocs int) {
 
 	if indexer.initialized == false {
 		log.Fatal("The Indexer has not been initialized.")
@@ -522,14 +549,14 @@ func (indexer *Indexer) Lookup(
 	copy(keywords, tokens)
 	copy(keywords[len(tokens):], labels)
 
-	scoredIDs,numDocs=indexer.internalLookup(keywords, tokens, docIds, countDocsOnly,scoringCriteria,filter,orderReverse)
+	scoredIDs,numDocs=indexer.internalLookup(keywords, tokens, docIds, countDocsOnly,distScoreCriteria,geoFilter,orderReverse)
 	//scoredIDs=[]*types.ScoredID(docs)
 	return
 }
 //a
 func (indexer *Indexer) internalLookup(
-	keywords, tokens []string, docIds map[string]bool, countDocsOnly bool,scoringCriteria types.ScoringCriteria,
-	filter types.FilterCriteria,orderReverse bool) (docs []*types.ScoredID, numDocs int) {
+	keywords, tokens []string, docIds map[string]bool, countDocsOnly bool,distScoreCriteria distscore.DistScoreCriteria,
+	geoFilter geofilter.GeoFilterCriteria,orderReverse bool) (docs []*types.ScoredID, numDocs int) {
 
 	table := make([]*KeywordIndices, len(keywords))
 	for i, keyword := range keywords {
@@ -596,22 +623,13 @@ func (indexer *Indexer) internalLookup(
 			if !ok || docState != 0 {
 				continue
 			}
-
-			forwardIndexBuf,errdbget:=indexer.dbforwardIndex.Get([]byte(baseDocId))
-			if errdbget!=nil {
-				continue
-			}
-			docfield:=types.DocField{}
-			docfield.Unmarshal(forwardIndexBuf)
-			//geohashfilter
-			if filter!=nil {
-				if !filter.Filter(docfield.GeoHash) {
+			if geoFilter!=nil {
+				if !geoFilter.Filter(indexer.tableLock.forwardtable[baseDocId].GeoHash) {
 					continue
 				}
 			}
 
 			indexedDoc,_:=types.ScoreIDPool.Get().(*types.ScoredID)
-			//indexedDoc := &types.ScoredID{}
 			indexedDoc.DocId = baseDocId
 			// 当为 LocsIndex 时计算关键词紧邻距离
 			if indexer.initOptions.IndexType == types.LocsIndex {
@@ -642,20 +660,21 @@ func (indexer *Indexer) internalLookup(
 				indexedDoc.TokenSnippetLocs = TokenLocs
 
 				// 添加 TokenLocs
-				indexedDoc.TokenLocs = make([][]int, len(tokens))
+				indexedDoc.TokenLocs = make([][]int32, len(tokens))
 				for i, t := range table[:len(tokens)] {
 					indexedDoc.TokenLocs[i] = t.locations[indexPointers[i]]
 				}
 			}
 
 			//对搜索到的文档进行打分
-			if scoringCriteria==nil {
+			if distScoreCriteria==nil {
 				//默认打分为bm25
 				// 当为 LocsIndex 或者 FrequenciesIndex 时计算BM25
 				bm25 := float32(0)
 				if indexer.initOptions.IndexType == types.LocsIndex ||
 					indexer.initOptions.IndexType == types.FrequenciesIndex {
-					d := indexer.tableLock.docTokenLens[baseDocId]
+					//d := indexer.tableLock.docTokenLens[baseDocId]
+					d := indexer.tableLock.forwardtable[baseDocId].DocTokenLen
 					for i, t := range table[:len(tokens)] {
 						var frequency float32
 						if indexer.initOptions.IndexType == types.LocsIndex {
@@ -678,13 +697,12 @@ func (indexer *Indexer) internalLookup(
 				indexedDoc.Scores = float32(bm25)
 			}else {
 				//用户自定义评分规则，分数小于0则剔除
-				if ok {
-					scores:=scoringCriteria.Score(docfield.Lat,docfield.Lng)
-					if scores<0 {
-						continue
-					}
-					indexedDoc.Scores=scores
+				scores:=distScoreCriteria.Score(indexer.tableLock.forwardtable[indexedDoc.DocId].Lat,
+					indexer.tableLock.forwardtable[indexedDoc.DocId].Lng)
+				if scores<0 {
+					continue
 				}
+				indexedDoc.Scores=scores
 			}
 
 			if !countDocsOnly {
@@ -754,12 +772,12 @@ func (indexer *Indexer) searchIndex(indices *KeywordIndices,
 // 选定的 P_i 通过 TokenLocs 参数传回。
 func computeTokenProximity(table []*KeywordIndices,
 	indexPointers []int, tokens []string) (
-	minTokenProximity int, TokenLocs []int) {
+	minTokenProximity int, TokenLocs []int32) {
 	minTokenProximity = -1
-	TokenLocs = make([]int, len(tokens))
+	TokenLocs = make([]int32, len(tokens))
 
 	var (
-		currentLocations, nextLocations []int
+		currentLocations, nextLocations []int32
 		currentMinValues, nextMinValues []int
 		path                            [][]int
 	)
@@ -795,7 +813,7 @@ func computeTokenProximity(table []*KeywordIndices,
 					return
 				}
 				value := currentMinValues[from] +
-					utils.AbsInt(nextLocations[to]-currentLocations[from]-len(tokens[i-1]))
+					utils.AbsInt(int(nextLocations[to]-currentLocations[from]-int32(len(tokens[i-1]))))
 
 				if nextMinValues[to] == -1 || value < nextMinValues[to] {
 					nextMinValues[to] = value

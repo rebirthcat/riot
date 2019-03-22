@@ -21,6 +21,10 @@ type DocData struct {
 	// 文档全文（必须是 UTF-8 格式），用于生成待索引的关键词
 	Content string
 
+	// new 类别
+	// Class string
+	// new 属性
+	//Attri interface{}
 
 	// 文档的关键词
 	// 当 Content 不为空的时候，优先从 Content 中分词得到关键词
@@ -34,9 +38,18 @@ type DocData struct {
 	// 这些标签并不出现在文档文本中
 	Labels []string
 
+	// 文档的评分字段，可以接纳任何类型的结构体
+	
+	//Fields interface{}
+	//
+	////文档的过滤字段，用于在计算bm25之前根据用户自定义规则剔除无效文档，减轻计算bm25的次数，以及减小结果数组的大小，降低内存消耗
+	//FieldsFilter interface{}
+	
+	GeoHash string
 
-	//文档的过滤和自定义排序字段
-	Field *DocField
+	Coordinate
+	
+	
 }
 
 // TokenData 文档的一个关键词
@@ -47,3 +60,17 @@ type TokenData struct {
 	// 关键词的首字节在文档中出现的位置
 	Locations []int
 }
+
+//// Attri doc attribute
+//type Attri struct {
+//	Title  string `json:"title"`
+//	Author string `json:"author"`
+//	Time   string `json:"time"`
+//	Ts     int64  `json:"ts"`
+//}
+
+type Coordinate struct {
+	Lat float64
+	Lng float64
+}
+

@@ -102,6 +102,26 @@ func (engine *Engine) Indexer(options types.EngineOpts) {
 	}
 }
 
+// CheckMem check the memory when the memory is larger
+// than 99.99% using the store
+//func (engine *Engine) CheckMem() {
+//	// Todo test
+//	if !engine.initOptions.UseStore {
+//		log.Println("Check virtualMemory...")
+//
+//		vmem, _ := mem.VirtualMemory()
+//		log.Printf("Total: %v, Free: %v, UsedPercent: %f%%\n",
+//			vmem.Total, vmem.Free, vmem.UsedPercent)
+//
+//		useMem := fmt.Sprintf("%.2f", vmem.UsedPercent)
+//		if useMem == "99.99" {
+//			engine.initOptions.UseStore = true
+//			engine.initOptions.StoreFolder = DefaultPath
+//			// os.MkdirAll(DefaultPath, 0777)
+//		}
+//	}
+//}
+
 // WithGse Using user defined segmenter
 // If using a not nil segmenter and the dictionary is loaded,
 // the `opt.GseDict` will be ignore.
@@ -122,18 +142,12 @@ func (engine *Engine) initDef(options types.EngineOpts) types.EngineOpts {
 		options.GseDict = "zh"
 	}
 
-	if options.StoreFolder == "" {
+	if  options.StoreFolder == "" {
 		log.Printf("Store file path is empty, use default folder path.")
 		options.StoreFolder = DefaultPath
+		// os.MkdirAll(DefaultPath, 0777)
 	}
 
-	if options.ForwardIndexStoreEngine == "" {
-		options.ForwardIndexStoreEngine = "bolt"
-	}
-
-	if options.ReverseIndexStoreEngine == "" {
-		options.ReverseIndexStoreEngine = "ldb"
-	}
 	return options
 }
 
@@ -167,24 +181,28 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
 		engine.indexers[shard].Init(shard, engine.initOptions.StoreIndexBufLen, dbPathForwardIndex, dbPathReverseIndex,
-			engine.initOptions.ForwardIndexStoreEngine, engine.initOptions.ReverseIndexStoreEngine,
-			engine.initOptions.DocNumber, engine.initOptions.TokenNumber, *engine.initOptions.IndexerOpts)
+			engine.initOptions.StoreEngine, engine.initOptions.DocNumber, engine.initOptions.TokenNumber, *engine.initOptions.IndexerOpts)
 	}
 
 	// 每个索引器内部持久化恢复过程
 	if options.Recover {
-		engine.StoreRecoverReverseIndex()
-		log.Println("index recover finish")
-		log.Printf("store number is %v", engine.NumDocsIndexedStore())
-		log.Printf("document number is %v", engine.NumDocsIndexed())
-		log.Printf("tokens number is %v", engine.NumTokensAdded())
+		if options.StoreConcurrent {
+			engine.StoreRecoverConcurrent()
+		}else {
+			engine.StoreRecoverOneByOne()
+		}
 	}
+	log.Println("index recover finish")
+	log.Printf("store number is %v", engine.NumDocsIndexedStore())
+	log.Printf("document number is %v", engine.NumDocsIndexed())
+	log.Printf("tokens number is %v", engine.NumTokensAdded())
 	// 初始化分词器通道
 	engine.segmenterChan = make(
 		chan segmenterReq, options.NumGseThreads)
 
 	// 初始化索引器通道
 	engine.Indexer(options)
+
 
 	// 启动分词器
 	for iThread := 0; iThread < options.NumGseThreads; iThread++ {
@@ -195,7 +213,7 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	for shard := 0; shard < options.NumShards; shard++ {
 		go engine.indexerAddDoc(shard)
 		go engine.indexerRemoveDoc(shard)
-		//go engine.indexers[shard].StoreUpdateForWardIndexWorker()
+		go engine.indexers[shard].StoreUpdateForWardIndexWorker()
 		go engine.indexers[shard].StoreUpdateReverseIndexWorker()
 
 		for i := 0; i < options.NumIndexerThreads; i++ {
@@ -204,16 +222,46 @@ func (engine *Engine) Init(options types.EngineOpts) {
 	}
 }
 
-func (engine *Engine) StoreRecoverReverseIndex() {
+func (engine *Engine) StoreRecoverOneByOne() {
+
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		engine.indexers[shard].StoreRecoverReverseIndex(engine.initOptions.TokenNumber, nil)
+		engine.indexers[shard].StoreRecoverForwardIndex(engine.initOptions.DocNumber, nil)
+		engine.indexers[shard].StoreUpdateBegin()
+	}
+}
+
+
+func (engine *Engine) StoreRecoverConcurrent() {
 	wg := sync.WaitGroup{}
 	wg.Add(engine.initOptions.NumShards * 2)
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		go engine.indexers[shard].StoreRecoverForwardIndex(engine.initOptions.DocNumber, &wg)
 		go engine.indexers[shard].StoreRecoverReverseIndex(engine.initOptions.TokenNumber, &wg)
+		engine.indexers[shard].StoreUpdateBegin()
 	}
 	wg.Wait()
 }
 
+func (engine *Engine) StoreReBuildOneByOne() {
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		engine.indexers[shard].StoreReverseIndexOneTime(nil)
+		engine.indexers[shard].StoreForwardIndexOneTime(nil)
+		engine.indexers[shard].StoreUpdateBegin()
+	}
+}
 
+
+func (engine *Engine) StoreReBuildConcurrent() {
+	wg := sync.WaitGroup{}
+	wg.Add(engine.initOptions.NumShards)
+	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
+		go engine.indexers[shard].StoreForwardIndexOneTime(&wg)
+		go engine.indexers[shard].StoreReverseIndexOneTime(&wg)
+		engine.indexers[shard].StoreUpdateBegin()
+	}
+	wg.Wait()
+}
 
 // IndexDoc add the document to the index
 // 将文档加入索引
@@ -349,6 +397,7 @@ func maxRankOutput(rankOpts types.RankOpts, rankLen int) (int, int) {
 	return start, end
 }
 
+
 // NotTimeOut not set engine timeout
 func (engine *Engine) NotTimeOut(request types.SearchReq, rankerReturnChan chan rankerReturnReq) (
 	rankOutID [][]*types.ScoredID, numDocs int) {
@@ -481,6 +530,7 @@ func freeObjToPool(objarr [][]*types.ScoredID) {
 	return
 }
 
+
 // Search find the document that satisfies the search criteria.
 // This function is thread safe
 // 查找满足搜索条件的文档，此函数线程安全
@@ -501,8 +551,8 @@ func (engine *Engine) Search(request types.SearchReq) (output types.SearchID) {
 		tokens:           tokens,
 		labels:           request.Labels,
 		docIds:           request.DocIds,
-		scoringCriteria:  request.ScoringCriteria,
-		filter:           request.Filter,
+		disScoreCriteria: request.DistScoreCriteria,
+		geoFilter:  	  request.GeoFilter,
 		rankerReturnChan: rankerReturnChan,
 		orderless:        request.Orderless,
 	}
@@ -528,28 +578,19 @@ func (engine *Engine) Flush() {
 	wg.Wait()
 }
 
-
-func (engine *Engine) StoreStartReBuild() {
+// FlushIndex block wait until all indexes are added
+// 阻塞等待直到所有索引添加完毕
+func (engine *Engine) FlushIndex() {
 	engine.Flush()
-	wg := sync.WaitGroup{}
-	wg.Add(engine.initOptions.NumShards)
-	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		go engine.indexers[shard].StoreReverseIndexOneTime(&wg)
-	}
-	wg.Wait()
-	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		engine.indexers[shard].StoreUpdateBegin()
-	}
 }
-
 
 // Close close the engine
 // 关闭引擎
 func (engine *Engine) Close() {
 	engine.Flush()
+	//time.Sleep(time.Second*300)
 	for i, indexer := range engine.indexers {
-		log.Printf("indexer %v :document number is %v,reverse index table len is %v", i,
-			indexer.GetNumDocsStore(), indexer.GetTableLen())
+		log.Printf("indexer %v :document number is %v,reverse index table len is %v", i, indexer.GetNumDocsStore(), indexer.GetTableLen())
 	}
 	for _, indexer := range engine.indexers {
 		dbf := indexer.GetForwardIndexDB()
@@ -561,6 +602,7 @@ func (engine *Engine) Close() {
 			dbr.Close()
 		}
 	}
+
 }
 
 // 从文本hash得到要分配到的 shard

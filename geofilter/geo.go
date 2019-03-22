@@ -12,13 +12,9 @@
 // License for the specific language governing permissions and limitations
 // under the License.
 
-package geo
+package geofilter
 
-//type GeoFilter struct {
-//	geohashmap map[string]bool
-//}
-//
-//func (filter *GeoFilter)GeoFilter(geohash string) bool {
-//	_,isExist:=filter.geohashmap[geohash]
-//	return isExist
-//}
+
+type GeoFilterCriteria interface {
+	Filter(geohash string) bool
+}

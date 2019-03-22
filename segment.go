@@ -282,20 +282,24 @@ func (engine *Engine) segmenterWorker() {
 				DocId:       request.docId,
 				TokenLen:    float32(numTokens),
 				Keywords:    make([]types.KeywordIndex, len(tokensMap)),
-				Field:		 request.data.Field,
-				//Field:       request.data.Fields,
-				//FieldFilter: request.data.FieldsFilter,
-
+				Geohash:request.data.GeoHash,
+				Lat:request.data.Lat,
+				Lng:request.data.Lng,
 			},
 			forceUpdate: request.forceUpdate,
 		}
 		iTokens := 0
 		for k, v := range tokensMap {
+			value:=make([]int32,0,len(v))
+			for _, x:=range v{
+				value=append(value,int32(x))
+			}
 			indexerRequest.doc.Keywords[iTokens] = types.KeywordIndex{
 				Text: k,
 				// 非分词标注的词频设置为0，不参与tf-idf计算
 				Frequency: float32(len(v)),
-				Starts:    v}
+				Starts:    value,
+			}
 			iTokens++
 		}
 

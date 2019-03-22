@@ -31,10 +31,13 @@ type DocIndex struct {
 	// Keywords 加入的索引键
 	Keywords []KeywordIndex
 
-	//Field  interface{}
+	Geohash string
 
-	Field *DocField
-	//FieldFilter interface{}
+	Position Coordinate
+
+	Lat float64
+
+	Lng float64
 }
 
 
@@ -48,7 +51,7 @@ type KeywordIndex struct {
 	Frequency float32
 
 	// Starts 搜索键在文档中的起始字节位置，按照升序排列
-	Starts []int
+	Starts []int32
 }
 
 // IndexedDoc 索引器返回结果
@@ -118,25 +121,3 @@ func (docs DocsId) Swap(i, j int) {
 func (docs DocsId) Less(i, j int) bool {
 	return docs[i] < docs[j]
 }
-
-//type DocField struct {
-//	DocTokenLen int
-//	GeoHash     string
-//	Lat         float64
-//	Lng         float64
-//	ScoreField interface{}
-//	FilterField interface{}
-//}
-
-type DocFieldSerialization interface {
-	Size() (s uint64)
-	Marshal(buf []byte) ([]byte, error)
-	Unmarshal(buf []byte) (uint64, error)
-}
-
-
-
-
-
-
-

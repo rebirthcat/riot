@@ -16,6 +16,8 @@
 package riot
 
 import (
+	"github.com/rebirthcat/riot/distscore"
+	"github.com/rebirthcat/riot/geofilter"
 	"github.com/rebirthcat/riot/types"
 )
 
@@ -31,8 +33,8 @@ type indexerLookupReq struct {
 
 	docIds           map[string]bool
 	orderReverse     bool
-	scoringCriteria  types.ScoringCriteria
-	filter           types.FilterCriteria
+	disScoreCriteria distscore.DistScoreCriteria
+	geoFilter        geofilter.GeoFilterCriteria
 	rankerReturnChan chan rankerReturnReq
 	orderless        bool
 }
@@ -86,7 +88,7 @@ func (engine *Engine) indexerLookup(shard int) {
 
 		docs, numDocs := engine.indexers[shard].Lookup(
 			request.tokens, request.labels,
-			request.docIds, request.countDocsOnly, request.scoringCriteria, request.filter, request.orderReverse)
+			request.docIds, request.countDocsOnly, request.disScoreCriteria, request.geoFilter, request.orderReverse)
 
 		request.rankerReturnChan <- rankerReturnReq{
 			docs: docs, numDocs: numDocs}

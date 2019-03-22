@@ -18,6 +18,6 @@ package types
 // FilterCriteria 过滤规则通用接口
 
 type FilterCriteria interface {
-	Filter(GeoHash string) bool
+	Filter(fields interface{}) bool
 }
 

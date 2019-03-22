@@ -15,6 +15,11 @@
 
 package types
 
+import (
+	"github.com/rebirthcat/riot/distscore"
+	"github.com/rebirthcat/riot/geofilter"
+)
+
 // SearchReq search request options
 type SearchReq struct {
 	// 搜索的短语（必须是 UTF-8 格式），会被分词
@@ -34,13 +39,14 @@ type SearchReq struct {
 	DocIds map[string]bool
 
 	// 自定义评分接口
-	ScoringCriteria ScoringCriteria
+	//ScoringCriteria ScoringCriteria
+	DistScoreCriteria distscore.DistScoreCriteria
 
 	//是否倒序排序
 	OrderReverse bool
 
 	//过滤选项
-	Filter   FilterCriteria
+	GeoFilter   geofilter.GeoFilterCriteria
 
 	// 超时，单位毫秒（千分之一秒）。此值小于等于零时不设超时。
 	// 搜索超时的情况下仍有可能返回部分排序结果。
