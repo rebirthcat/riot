@@ -68,6 +68,7 @@ func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitG
 		docsState[docID]=0
 		field:=&DocField{}
 		field.Unmarshal(v)
+		log.Println(docID+":"+field.GeoHash)
 		totalTokenLen+=field.DocTokenLen
 		forwardtable[docID]=field
 		numDocs++
@@ -92,6 +93,7 @@ func (indexer *Indexer)StoreRecoverReverseIndex(tokenNumber uint64, wg *sync.Wai
 	indexer.dbRevertIndex.ForEach(func(k, v []byte) error {
 		indices:=&KeywordIndices{}
 		indices.Unmarshal(v)
+		log.Println(indices.docIds)
 		table[string(k)]=indices
 		return nil
 	})
