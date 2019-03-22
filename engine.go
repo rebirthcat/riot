@@ -102,25 +102,7 @@ func (engine *Engine) Indexer(options types.EngineOpts) {
 	}
 }
 
-// CheckMem check the memory when the memory is larger
-// than 99.99% using the store
-//func (engine *Engine) CheckMem() {
-//	// Todo test
-//	if !engine.initOptions.UseStore {
-//		log.Println("Check virtualMemory...")
-//
-//		vmem, _ := mem.VirtualMemory()
-//		log.Printf("Total: %v, Free: %v, UsedPercent: %f%%\n",
-//			vmem.Total, vmem.Free, vmem.UsedPercent)
-//
-//		useMem := fmt.Sprintf("%.2f", vmem.UsedPercent)
-//		if useMem == "99.99" {
-//			engine.initOptions.UseStore = true
-//			engine.initOptions.StoreFolder = DefaultPath
-//			// os.MkdirAll(DefaultPath, 0777)
-//		}
-//	}
-//}
+
 
 // WithGse Using user defined segmenter
 // If using a not nil segmenter and the dictionary is loaded,
@@ -254,7 +236,7 @@ func (engine *Engine) StoreReBuildOneByOne() {
 
 func (engine *Engine) StoreReBuildConcurrent() {
 	wg := sync.WaitGroup{}
-	wg.Add(engine.initOptions.NumShards)
+	wg.Add(engine.initOptions.NumShards*2)
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		go engine.indexers[shard].StoreForwardIndexOneTime(&wg)
 		go engine.indexers[shard].StoreReverseIndexOneTime(&wg)
