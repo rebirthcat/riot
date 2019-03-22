@@ -56,28 +56,18 @@ func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitG
 	if indexer.dbforwardIndex==nil {
 		log.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
 	}
-	numDocs:= uint64(0)
-	totalTokenLen:=float32(0)
-
-	docsState:=make(map[string]int,docNumber)
-	//正向索引字段
-	forwardtable:=make(map[string]*DocField,docNumber)
-
 	indexer.dbforwardIndex.ForEach(func(k, v []byte) error {
 		docID := string(k)
-		docsState[docID]=0
+		indexer.tableLock.docsState[docID]=0
 		field:=&DocField{}
 		field.Unmarshal(v)
-		log.Println(docID+":"+field.GeoHash)
-		totalTokenLen+=field.DocTokenLen
-		forwardtable[docID]=field
-		numDocs++
+		indexer.tableLock.totalTokenLen+=field.DocTokenLen
+		indexer.tableLock.forwardtable[docID]=field
+		indexer.tableLock.numDocs++
 		return nil
 	})
 	//恢复indexer 中tableLock部分字段
-	indexer.tableLock.docsState=docsState
-	indexer.tableLock.forwardtable=forwardtable
-	log.Printf("indexer%v forwardindex recover finish",indexer.shardNumber)
+	log.Printf("indexer%v forwardindex recover finish:",indexer.shardNumber)
 	if wg!=nil {
 		wg.Done()
 	}
@@ -86,18 +76,16 @@ func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitG
 
 
 func (indexer *Indexer)StoreRecoverReverseIndex(tokenNumber uint64, wg *sync.WaitGroup)  {
-	table:=make(map[string]*KeywordIndices,tokenNumber)
+
 	if indexer.dbRevertIndex==nil {
 		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
 	}
 	indexer.dbRevertIndex.ForEach(func(k, v []byte) error {
 		indices:=&KeywordIndices{}
 		indices.Unmarshal(v)
-		log.Println(indices.docIds)
-		table[string(k)]=indices
+		indexer.tableLock.table[string(k)]=indices
 		return nil
 	})
-	indexer.tableLock.table=table
 	log.Printf("indexer%v reverseindex recover finish",indexer.shardNumber)
 	if wg!=nil {
 		wg.Done()
