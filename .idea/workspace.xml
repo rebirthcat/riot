@@ -2,43 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="2fbc9772-db50-4de1-9d0c-f15b55a06ee8" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/index_ranker.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/core/ranker.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/benchmarking.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/bm25.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/codelab.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/custom_scoring_criteria.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/distributed_indexing_and_search.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/docker.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/feedback.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/logic.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/persistent_storage.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/realtime_indexing.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/segmenter.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/token_proximity.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/en/why_riot.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/benchmarking.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/bm25.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/codelab.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/cpu.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/custom_scoring_criteria.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/distributed_indexing_and_search.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/docker.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/feedback.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/gwk.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/logic.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/persistent_storage.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/realtime_indexing.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/segmenter.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/token_proximity.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/zh/why_riot.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/indexer_worker.go" beforeDir="false" afterPath="$PROJECT_DIR$/indexer_worker.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/types/doc_info.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/types/filter_criteria.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/types/scoring_criteria.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/types/search_request.go" beforeDir="false" afterPath="$PROJECT_DIR$/types/search_request.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/types/search_response.go" beforeDir="false" afterPath="$PROJECT_DIR$/types/search_response.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/CHANGELOG.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/CHANGELOG.md" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -69,8 +33,8 @@
           <entry key="LICENSE" value="1" />
           <entry key="docfield_schema" value="1" />
           <entry key="gitignore" value="1" />
-          <entry key="go" value="708" />
-          <entry key="md" value="6" />
+          <entry key="go" value="709" />
+          <entry key="md" value="7" />
           <entry key="mod" value="9" />
           <entry key="schema" value="4" />
           <entry key="sum" value="5" />
@@ -83,8 +47,8 @@
       <usages-collector id="statistics.file.types.open">
         <counts>
           <entry key="DTD" value="9" />
-          <entry key="Go" value="708" />
-          <entry key="Markdown" value="6" />
+          <entry key="Go" value="709" />
+          <entry key="Markdown" value="7" />
           <entry key="PLAIN_TEXT" value="17" />
           <entry key="SVG" value="4" />
           <entry key="YAML" value="3" />
@@ -112,8 +76,20 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/engine.go">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="185">
-              <caret line="178" column="45" selection-start-line="178" selection-start-column="45" selection-end-line="178" selection-end-column="45" />
+            <state relative-caret-position="-3423">
+              <caret line="127" column="40" lean-forward="true" selection-start-line="127" selection-start-column="40" selection-end-line="127" selection-end-column="40" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/docs/CHANGELOG.md">
+          <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
+            <state split_layout="SPLIT">
+              <first_editor relative-caret-position="18">
+                <caret line="1" lean-forward="true" selection-start-line="1" selection-end-line="1" />
+              </first_editor>
+              <second_editor />
             </state>
           </provider>
         </entry>
@@ -136,7 +112,7 @@
           </provider>
         </entry>
       </file>
-      <file pinned="false" current-in-tab="true">
+      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/indexer_worker.go">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="339">
@@ -193,15 +169,6 @@
           </provider>
         </entry>
       </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/types/search_response.go">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-1656">
-              <caret line="31" column="37" lean-forward="true" selection-start-line="31" selection-start-column="37" selection-end-line="31" selection-end-column="37" />
-            </state>
-          </provider>
-        </entry>
-      </file>
     </leaf>
   </component>
   <component name="FileTemplateManagerImpl">
@@ -247,7 +214,6 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/examples/info/main.go" />
         <option value="$PROJECT_DIR$/examples/logic/main.go" />
         <option value="$PROJECT_DIR$/examples/new/main.go" />
         <option value="$PROJECT_DIR$/examples/pinyin/old/main.go" />
@@ -291,13 +257,14 @@
         <option value="$PROJECT_DIR$/types/index.go" />
         <option value="$PROJECT_DIR$/segment.go" />
         <option value="$PROJECT_DIR$/types/engine_init_options.go" />
-        <option value="$PROJECT_DIR$/engine.go" />
         <option value="$PROJECT_DIR$/core/indexer.go" />
         <option value="$PROJECT_DIR$/core/indexer_store.go" />
         <option value="$PROJECT_DIR$/counters.go" />
         <option value="$PROJECT_DIR$/types/search_request.go" />
         <option value="$PROJECT_DIR$/types/search_response.go" />
         <option value="$PROJECT_DIR$/indexer_worker.go" />
+        <option value="$PROJECT_DIR$/engine.go" />
+        <option value="$PROJECT_DIR$/docs/CHANGELOG.md" />
       </list>
     </option>
   </component>
@@ -511,9 +478,6 @@
     <entry file="file://$PROJECT_DIR$/stop_tokens.go">
       <provider selected="true" editor-type-id="text-editor" />
     </entry>
-    <entry file="file://$PROJECT_DIR$/info.go">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
     <entry file="file://$PROJECT_DIR$/../../pkg/mod/github.com/go-ego/gse@v0.0.0-20190303140332-a6d8f4c416b8/dict_util.go">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="-77">
@@ -667,16 +631,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/docs/CHANGELOG.md">
-      <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
-        <state split_layout="SPLIT">
-          <first_editor relative-caret-position="-828">
-            <caret line="14" column="37" lean-forward="true" selection-start-line="14" selection-start-column="37" selection-end-line="14" selection-end-column="37" />
-          </first_editor>
-          <second_editor />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/engine/engine.go">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="288">
@@ -778,13 +732,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/engine.go">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="185">
-          <caret line="178" column="45" selection-start-line="178" selection-start-column="45" selection-end-line="178" selection-end-column="45" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/counters.go">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="18">
@@ -792,10 +739,34 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/info.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="303">
+          <caret line="141" column="12" selection-start-line="141" selection-start-column="12" selection-end-line="141" selection-end-column="12" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/indexer_worker.go">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="339">
           <caret line="46" lean-forward="true" selection-start-line="46" selection-end-line="46" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/engine.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-3423">
+          <caret line="127" column="40" lean-forward="true" selection-start-line="127" selection-start-column="40" selection-end-line="127" selection-end-column="40" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/docs/CHANGELOG.md">
+      <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
+        <state split_layout="SPLIT">
+          <first_editor relative-caret-position="18">
+            <caret line="1" lean-forward="true" selection-start-line="1" selection-end-line="1" />
+          </first_editor>
+          <second_editor />
         </state>
       </provider>
     </entry>
