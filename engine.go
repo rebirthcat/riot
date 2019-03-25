@@ -28,12 +28,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rebirthcat/riot/core"
-	"github.com/rebirthcat/riot/types"
-	"github.com/rebirthcat/riot/utils"
-
 	"github.com/go-ego/gse"
 	"github.com/go-ego/murmur"
+	"github.com/rebirthcat/riot/core"
+	"github.com/rebirthcat/riot/types"
 )
 
 const (
@@ -365,18 +363,6 @@ func (engine *Engine) Tokens(request types.SearchReq) (tokens []string) {
 	return
 }
 
-func maxRankOutput(rankOpts types.RankOpts, rankLen int) (int, int) {
-	var start, end int
-	if rankOpts.MaxOutputs == 0 {
-		start = utils.MinInt(rankOpts.OutputOffset, rankLen)
-		end = rankLen
-		return start, end
-	}
-
-	start = utils.MinInt(rankOpts.OutputOffset, rankLen)
-	end = utils.MinInt(start+rankOpts.MaxOutputs, rankLen)
-	return start, end
-}
 
 
 // NotTimeOut not set engine timeout

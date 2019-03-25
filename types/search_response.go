@@ -22,13 +22,6 @@ type BaseResp struct {
 	// 搜索用到的关键词
 	Tokens []string
 
-	// 类别
-	// Class string
-
-	// 搜索到的文档，已排序
-	// Docs []ScoredDoc
-	// Docs interface{}
-
 	// 搜索是否超时。超时的情况下也可能会返回部分结果
 	Timeout bool
 
@@ -43,12 +36,6 @@ type SearchResp struct {
 	Docs interface{}
 }
 
-// SearchDoc search response options
-//type SearchDoc struct {
-//	BaseResp
-//	// 搜索到的文档，已排序
-//	Docs []ScoredDoc
-//}
 
 // SearchID search response options
 type SearchID struct {
@@ -57,53 +44,6 @@ type SearchID struct {
 	Docs []ScoredID
 }
 
-// Content search content
-//type Content struct {
-//	// new Content
-//	Content string
-//
-//	// new 属性 Attri
-//	Attri interface{}
-//
-//	// new 返回评分字段
-//	Fields interface{}
-//}
-
-// ScoredDoc scored the document
-//type ScoredDoc struct {
-//	ScoredID
-//
-//	// new 返回文档 Content
-//	Content string
-//	// new 返回文档属性 Attri
-//	Attri interface{}
-//	// new 返回评分字段
-//	Fields interface{}
-//}
-//
-//// ScoredDocs 为了方便排序
-//type ScoredDocs []ScoredDoc
-//
-//func (docs ScoredDocs) Len() int {
-//	return len(docs)
-//}
-//
-//func (docs ScoredDocs) Swap(i, j int) {
-//	docs[i], docs[j] = docs[j], docs[i]
-//}
-//
-//func (docs ScoredDocs) Less(i, j int) bool {
-//	// 为了从大到小排序，这实际上实现的是 More 的功能
-//	min := utils.MinInt(len(docs[i].Scores), len(docs[j].Scores))
-//	for iScore := 0; iScore < min; iScore++ {
-//		if docs[i].Scores[iScore] > docs[j].Scores[iScore] {
-//			return true
-//		} else if docs[i].Scores[iScore] < docs[j].Scores[iScore] {
-//			return false
-//		}
-//	}
-//	return len(docs[i].Scores) > len(docs[j].Scores)
-//}
 
 /*
   ______   .__   __.  __      ____    ____  __   _______

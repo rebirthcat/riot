@@ -44,11 +44,7 @@ type indexerRemoveDocReq struct {
 	forceUpdate bool
 }
 
-//func (engin *Engine) indexerAddDocToStore(shard int) {
-//	for {
-//		request:=<-engin.indexers[shard].
-//	}
-//}
+
 
 func (engine *Engine) indexerAddDoc(shard int) {
 	for {
@@ -63,24 +59,6 @@ func (engine *Engine) indexerRemoveDoc(shard int) {
 		engine.indexers[shard].RemoveDocToCache(request.docId, request.forceUpdate)
 	}
 }
-
-//func (engine *Engine) orderLess(
-//	request indexerLookupReq, docs []types.IndexedDoc) {
-//	var outputDocs types.ScoredIDs
-//	for _, d := range docs {
-//		outputDocs = append(outputDocs, &types.ScoredID{
-//			DocId:            d.DocId,
-//			TokenSnippetLocs: d.TokenSnippetLocs,
-//			TokenLocs:        d.TokenLocs,
-//		})
-//	}
-//
-//	request.rankerReturnChan <- rankerReturnReq{
-//		docs:    outputDocs,
-//		numDocs: len(outputDocs),
-//	}
-//	return
-//}
 
 func (engine *Engine) indexerLookup(shard int) {
 	for {
