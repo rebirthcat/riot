@@ -516,7 +516,7 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 		}
 		select {
 		case indexer.storeUpdateReverseIndexChan <-storereversereq:
-			log.Println("a reverseindex is send to set")
+			//log.Println("a reverseindex is send to set")
 		case <-timer.C:
 			log.Println("timeout")
 		}
