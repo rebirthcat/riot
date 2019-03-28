@@ -15,9 +15,8 @@
 package store
 
 import (
-	"log"
-
 	"github.com/dgraph-io/badger"
+	"github.com/rebirthcat/riot/log"
 )
 
 // Badger badger.KV db store
@@ -40,7 +39,7 @@ func OpenBadger(dbPath string) (Store, error) {
 	opt.SyncWrites = true
 	kv, err := badger.Open(opt)
 	if err != nil {
-		log.Fatal("badger NewKV: ", err)
+		log.Logrus.Fatal("badger NewKV: ", err)
 	}
 
 	return &Badger{kv}, err

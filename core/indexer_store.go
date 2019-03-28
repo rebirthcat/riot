@@ -1,8 +1,8 @@
 package core
 
 import (
+	"github.com/rebirthcat/riot/log"
 	"github.com/rebirthcat/riot/store"
-	"log"
 	"sync"
 )
 
@@ -36,7 +36,7 @@ func (indexer *Indexer) OpenForwardIndexDB(dbPath string,StoreEngine string)  {
 	var erropen error
 	indexer.dbforwardIndex, erropen= store.OpenStore(dbPath, StoreEngine)
 	if indexer.dbforwardIndex == nil || erropen != nil {
-		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
+		log.Logrus.Fatal("Unable to open database ", dbPath, ": ", erropen)
 	}
 }
 
@@ -44,7 +44,7 @@ func (indexer *Indexer)OpenReverseIndexDB(dbPath string,StoreEngine string)  {
 	var erropen error
 	indexer.dbRevertIndex,erropen=store.OpenStore(dbPath,StoreEngine)
 	if indexer.dbRevertIndex==nil||erropen!=nil {
-		log.Fatal("Unable to open database ", dbPath, ": ", erropen)
+		log.Logrus.Fatal("Unable to open database ", dbPath, ": ", erropen)
 	}
 }
 
@@ -53,7 +53,7 @@ func (indexer *Indexer)OpenReverseIndexDB(dbPath string,StoreEngine string)  {
 func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitGroup)  {
 	//indexer中的字段
 	if indexer.dbforwardIndex==nil {
-		log.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
+		log.Logrus.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
 	}
 	indexer.dbforwardIndex.ForEach(func(k, v []byte) error {
 		docID := string(k)
@@ -66,7 +66,7 @@ func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitG
 		return nil
 	})
 	//恢复indexer 中tableLock部分字段
-	log.Printf("indexer%v forwardindex recover finish",indexer.shardNumber)
+	log.Logrus.Infof("indexer%v forwardindex recover finish",indexer.shardNumber)
 	if wg!=nil {
 		wg.Done()
 	}
@@ -77,7 +77,7 @@ func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitG
 func (indexer *Indexer)StoreRecoverReverseIndex(tokenNumber uint64, wg *sync.WaitGroup)  {
 
 	if indexer.dbRevertIndex==nil {
-		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
+		log.Logrus.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
 	}
 	indexer.dbRevertIndex.ForEach(func(k, v []byte) error {
 		indices:=&KeywordIndices{}
@@ -85,7 +85,7 @@ func (indexer *Indexer)StoreRecoverReverseIndex(tokenNumber uint64, wg *sync.Wai
 		indexer.tableLock.table[string(k)]=indices
 		return nil
 	})
-	log.Printf("indexer%v reverseindex recover finish",indexer.shardNumber)
+	log.Logrus.Infof("indexer%v reverseindex recover finish",indexer.shardNumber)
 	if wg!=nil {
 		wg.Done()
 	}
@@ -96,7 +96,7 @@ func (indexer *Indexer)StoreRecoverReverseIndex(tokenNumber uint64, wg *sync.Wai
 //系统启动时rebuild索引
 func (indexer *Indexer)StoreForwardIndexOneTime(wg *sync.WaitGroup)  {
 	if indexer.dbforwardIndex==nil {
-		log.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
+		log.Logrus.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
 	}
 	for docId,docField:=range indexer.tableLock.forwardtable{
 
@@ -111,7 +111,7 @@ func (indexer *Indexer)StoreForwardIndexOneTime(wg *sync.WaitGroup)  {
 
 func (indexer *Indexer)StoreReverseIndexOneTime(wg *sync.WaitGroup)  {
 	if indexer.dbRevertIndex==nil {
-		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
+		log.Logrus.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
 	}
 	for token,indices:=range indexer.tableLock.table{
 		buf,_:=indices.Marshal(nil)
@@ -130,7 +130,7 @@ func (indexer *Indexer)StoreUpdateBegin()  {
 //系统正常运行中动态的添加索引的持久化
 func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
 	if indexer.dbforwardIndex==nil {
-		log.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
+		log.Logrus.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
 	}
 
 	for {
@@ -138,19 +138,17 @@ func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
 	 	//如果传过来的持久化请求中的DocTokenLen小于0,则是删除请求，即从RemoveDocs（）函数中传过来的
 	 	if request.Remove {
 	 		indexer.dbforwardIndex.Delete([]byte(request.DocID))
-	 		//atomic.AddUint64(&indexer.numDocsStore,^uint64(1-1))
 	 		continue
 	 	}else {
 			buf,_:=request.Field.Marshal(nil)
 			indexer.dbforwardIndex.Set([]byte(request.DocID), buf)
-			//atomic.AddUint64(&indexer.numDocsStore, 1)
 		}
 	}
 }
 
 func (indexer *Indexer) StoreUpdateReverseIndexWorker() {
 	if indexer.dbRevertIndex==nil {
-		log.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
+		log.Logrus.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
 	}
 	for {
 		request := <-indexer.storeUpdateReverseIndexChan

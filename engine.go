@@ -22,7 +22,7 @@ package riot
 import (
 	"container/heap"
 	"fmt"
-	"log"
+	"github.com/rebirthcat/riot/log"
 	"strconv"
 	"strings"
 	"sync"
@@ -51,6 +51,8 @@ const (
 func GetVersion() string {
 	return Version
 }
+
+
 
 // Engine initialize the engine
 type Engine struct {
@@ -107,7 +109,7 @@ func (engine *Engine) Indexer(options types.EngineOpts) {
 // the `opt.GseDict` will be ignore.
 func (engine *Engine) WithGse(segmenter gse.Segmenter) *Engine {
 	if engine.initialized {
-		log.Fatal(`Do not re-initialize the engine, 
+		log.Logrus.Fatal(`Do not re-initialize the engine, 
 			WithGse should call before initialize the engine.`)
 	}
 
@@ -118,12 +120,12 @@ func (engine *Engine) WithGse(segmenter gse.Segmenter) *Engine {
 
 func (engine *Engine) initDef(options types.EngineOpts) types.EngineOpts {
 	if options.GseDict == "" && !options.NotUseGse && !engine.loaded {
-		log.Printf("Dictionary file path is empty, load the default dictionary file.")
+		log.Logrus.Infoln("Dictionary file path is empty, load the default dictionary file.")
 		options.GseDict = "zh"
 	}
 
 	if  options.StoreFolder == "" {
-		log.Printf("Store file path is empty, use default folder path.")
+		log.Logrus.Infoln("Store file path is empty, use default folder path.")
 		options.StoreFolder = DefaultPath
 		// os.MkdirAll(DefaultPath, 0777)
 	}
@@ -135,7 +137,7 @@ func (engine *Engine) initDef(options types.EngineOpts) types.EngineOpts {
 func (engine *Engine) Init(options types.EngineOpts) {
 	// 初始化初始参数
 	if engine.initialized {
-		log.Fatal("Do not re-initialize the engine.")
+		log.Logrus.Fatal("Do not re-initialize the engine.")
 	}
 	options = engine.initDef(options)
 
@@ -172,9 +174,9 @@ func (engine *Engine) Init(options types.EngineOpts) {
 			engine.StoreRecoverOneByOne()
 		}
 	}
-	log.Println("index recover finish")
-	log.Printf("document number is %v", engine.NumDocsIndexed())
-	log.Printf("tokens number is %v", engine.NumTokensAdded())
+	log.Logrus.Infoln("index recover finish")
+	log.Logrus.Infof("document number is %v", engine.NumDocsIndexed())
+	log.Logrus.Infof("tokens number is %v", engine.NumTokensAdded())
 	// 初始化分词器通道
 	engine.segmenterChan = make(
 		chan segmenterReq, options.NumGseThreads)
@@ -277,7 +279,7 @@ func (engine *Engine) internalIndexDoc(docId string, data types.DocData,
 	forceUpdate bool) {
 
 	if !engine.initialized {
-		log.Fatal("The engine must be initialized first.")
+		log.Logrus.Fatal("The engine must be initialized first.")
 	}
 
 	hash := murmur.Sum32(fmt.Sprintf("%s%s", docId, data.Content))
@@ -303,7 +305,7 @@ func (engine *Engine) RemoveDoc(docId string, forceUpdate ...bool) error {
 	}
 
 	if !engine.initialized {
-		log.Fatal("The engine must be initialized first.")
+		log.Logrus.Fatal("The engine must be initialized first.")
 	}
 
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
@@ -503,7 +505,7 @@ func freeObjToPool(objarr [][]*types.ScoredID) {
 // 查找满足搜索条件的文档，此函数线程安全
 func (engine *Engine) Search(request types.SearchReq) (output types.SearchID) {
 	if !engine.initialized {
-		log.Fatal("The engine must be initialized first.")
+		log.Logrus.Fatal("The engine must be initialized first.")
 	}
 
 	tokens := engine.Tokens(request)
@@ -557,7 +559,7 @@ func (engine *Engine) Close() {
 	engine.Flush()
 	//time.Sleep(time.Second*300)
 	for i, indexer := range engine.indexers {
-		log.Printf("indexer %v :document number is %v,reverse index table len is %v", i, indexer.GetNumDocs(), indexer.GetTableLen())
+		log.Logrus.Infof("indexer %v :document number is %v,reverse index table len is %v", i, indexer.GetNumDocs(), indexer.GetTableLen())
 	}
 	for _, indexer := range engine.indexers {
 		dbf := indexer.GetForwardIndexDB()

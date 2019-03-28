@@ -22,8 +22,10 @@ package core
 import (
 	"github.com/rebirthcat/riot/distscore"
 	"github.com/rebirthcat/riot/geofilter"
+	"github.com/sirupsen/logrus"
+
+	"github.com/rebirthcat/riot/log"
 	"github.com/rebirthcat/riot/store"
-	"log"
 	"math"
 	"sort"
 	"sync"
@@ -135,7 +137,7 @@ func (indexer *Indexer)GetNumTotalTokenLen()uint64  {
 // Init 初始化索引器
 func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex string,dbPathReverseIndex string,StoreEngine string, docNumber uint64,tokenNumber uint64,options types.IndexerOpts) {
 	if indexer.initialized == true {
-		log.Fatal("The Indexer can not be initialized twice.")
+		log.Logrus.Fatal("The Indexer can not be initialized twice.")
 	}
 	options.Init()
 	indexer.initOptions = options
@@ -158,12 +160,12 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex st
 	var erropen error
 	indexer.dbforwardIndex, erropen= store.OpenStore(dbPathForwardIndex, StoreEngine)
 	if indexer.dbforwardIndex == nil || erropen != nil {
-		log.Fatal("Unable to open database ", dbPathForwardIndex, ": ", erropen)
+		log.Logrus.Fatal("Unable to open database ", dbPathForwardIndex, ": ", erropen)
 	}
 
 	indexer.dbRevertIndex,erropen=store.OpenStore(dbPathReverseIndex,StoreEngine)
 	if indexer.dbRevertIndex==nil||erropen!=nil {
-		log.Fatal("Unable to open database ", dbPathReverseIndex, ": ", erropen)
+		log.Logrus.Fatal("Unable to open database ", dbPathReverseIndex, ": ", erropen)
 	}
 }
 
@@ -194,7 +196,7 @@ func (indexer *Indexer) getIndexLen(ti *KeywordIndices) int {
 //b a
 func (indexer *Indexer) AddDocToCache(doc *types.DocIndex, forceUpdate bool) {
 	if indexer.initialized == false {
-		log.Fatal("The Indexer has not been initialized.")
+		log.Logrus.Fatal("The Indexer has not been initialized.")
 	}
 
 	indexer.addCacheLock.Lock()
@@ -258,7 +260,7 @@ func (indexer *Indexer) AddDocToCache(doc *types.DocIndex, forceUpdate bool) {
 //a d
 func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 	if indexer.initialized == false {
-		log.Fatal("The Indexer has not been initialized.")
+		log.Logrus.Fatal("The Indexer has not been initialized.")
 	}
 
 	indexer.tableLock.Lock()
@@ -302,7 +304,9 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			case indexer.storeUpdateForwardIndexChan <- storeforwardreq:
 				//log
 			case <-timer.C:
-				log.Println("timeout")
+				log.Logrus.WithFields(logrus.Fields{
+					"request":storeforwardreq.DocID,
+				}).Errorln("更新正向索引的持久化请求发送失败")
 			}
 		}
 
@@ -361,7 +365,9 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 				case indexer.storeUpdateReverseIndexChan <- storereversereq:
 					//log.Println("a reverseindex is send to store")
 				case <-timer.C:
-					log.Println("timeout")
+					log.Logrus.WithFields(logrus.Fields{
+						"request":storereversereq.Token,
+					}).Errorln("更新反向索引的持久化请求发送失败")
 				}
 			}
 		}
@@ -379,7 +385,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 //c a
 func (indexer *Indexer) RemoveDocToCache(docId string, forceUpdate bool) bool {
 	if indexer.initialized == false {
-		log.Fatal("The Indexer has not been initialized.")
+		log.Logrus.Fatal("The Indexer has not been initialized.")
 	}
 
 	indexer.removeCacheLock.Lock()
@@ -419,7 +425,7 @@ func (indexer *Indexer) RemoveDocToCache(docId string, forceUpdate bool) bool {
 //a d
 func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 	if indexer.initialized == false {
-		log.Fatal("The Indexer has not been initialized.")
+		log.Logrus.Fatal("The Indexer has not been initialized.")
 	}
 
 	indexer.tableLock.Lock()
@@ -447,7 +453,7 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 		case indexer.storeUpdateForwardIndexChan<-storeforwardreq:
 			//log.Println("a forwardindex is send to remove")
 		case <-timer.C:
-			log.Println("timeout")
+			log.Logrus.Println("timeout")
 		}
 	}
 
@@ -518,7 +524,7 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 		case indexer.storeUpdateReverseIndexChan <-storereversereq:
 			//log.Println("a reverseindex is send to set")
 		case <-timer.C:
-			log.Println("timeout")
+			log.Logrus.Println("timeout")
 		}
 	}
 }
@@ -533,7 +539,7 @@ func (indexer *Indexer) Lookup(
 	geoFilter geofilter.GeoFilterCriteria,orderReverse bool) (scoredIDs []*types.ScoredID, numDocs int) {
 
 	if indexer.initialized == false {
-		log.Fatal("The Indexer has not been initialized.")
+		log.Logrus.Fatal("The Indexer has not been initialized.")
 	}
 
 	indexer.tableLock.RLock()

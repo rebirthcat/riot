@@ -17,7 +17,7 @@ package riot
 
 import (
 	"bufio"
-	"log"
+	"github.com/rebirthcat/riot/log"
 	"os"
 )
 
@@ -36,7 +36,7 @@ func (st *StopTokens) Init(stopTokenFile string) {
 
 	file, err := os.Open(stopTokenFile)
 	if err != nil {
-		log.Fatal("Open stop token file error: ", err)
+		log.Logrus.Fatal("Open stop token file error: ", err)
 	}
 	defer file.Close()
 
