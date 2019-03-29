@@ -17,6 +17,7 @@ package types
 
 import (
 	"runtime"
+	"time"
 )
 
 var (
@@ -110,6 +111,8 @@ type EngineOpts struct {
 	DocNumber uint64
 	TokenNumber uint64
 
+	StoreUpdateTimeOut time.Duration
+
 	Recover bool
 }
 
@@ -145,6 +148,10 @@ func (options *EngineOpts) Init() {
 		options.StoreIndexBufLen=defaultStoreChanBufLen
 	}
 
+	if options.StoreUpdateTimeOut.Seconds()==0||options.StoreUpdateTimeOut.Seconds()<0.1 {
+		options.StoreUpdateTimeOut=time.Millisecond*100
+	}
+
 	if options.IndexerOpts == nil {
 		options.IndexerOpts = &defaultIndexerOpts
 	}
@@ -160,6 +167,7 @@ func (options *EngineOpts) Init() {
 	if options.IndexerOpts.IndexType==0 {
 		options.IndexerOpts.IndexType=FrequenciesIndex
 	}
+
 
 
 }

@@ -85,6 +85,7 @@ type Indexer struct {
 	storeUpdateReverseIndexChan    chan StoreReverseIndexReq
 	//表示保存在持久化文件中的文档树量(因为该值只做统计使用，不参与搜索的bm25的计算，所以不适合放到tableLock里)
 	//numDocsStore	uint64
+	storeUpdateTimeOut    time.Duration
 }
 
 // KeywordIndices 反向索引表的一行，收集了一个搜索键出现的所有文档，按照DocId从小到大排序。
@@ -134,7 +135,8 @@ func (indexer *Indexer)GetNumTotalTokenLen()uint64  {
 
 
 // Init 初始化索引器
-func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex string,dbPathReverseIndex string,StoreEngine string, docNumber uint64,tokenNumber uint64,options types.IndexerOpts) {
+func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex string,dbPathReverseIndex string,
+	StoreEngine string, docNumber uint64,tokenNumber uint64, storeUpdateTimeOut time.Duration,options types.IndexerOpts) {
 	if indexer.initialized == true {
 		types.Logrus.Fatal("The Indexer can not be initialized twice.")
 	}
@@ -154,6 +156,7 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex st
 
 	indexer.storeUpdateForwardIndexChan=make(chan StoreForwardIndexReq,StoreChanBufLen)
 	indexer.storeUpdateReverseIndexChan=make(chan StoreReverseIndexReq,StoreChanBufLen)
+	indexer.storeUpdateTimeOut=storeUpdateTimeOut
 	indexer.shardNumber=shard
 
 	var erropen error
@@ -298,7 +301,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 				Remove:false,
 				Field:docfield,
 			}
-			timer = time.NewTimer(time.Millisecond * 100)
+			timer = time.NewTimer(indexer.storeUpdateTimeOut)
 			select {
 			case indexer.storeUpdateForwardIndexChan <- storeforwardreq:
 				//log
@@ -447,12 +450,14 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 			Remove:true,
 		}
 		//持久化
-		timer=time.NewTimer(time.Millisecond*100)
+		timer=time.NewTimer(indexer.storeUpdateTimeOut)
 		select {
 		case indexer.storeUpdateForwardIndexChan<-storeforwardreq:
 			//log.Println("a forwardindex is send to remove")
 		case <-timer.C:
-			types.Logrus.Println("timeout")
+			types.Logrus.WithFields(logrus.Fields{
+				"request":storeforwardreq.DocID,
+			}).Errorln("删除正向索引的持久化请求发送失败")
 		}
 	}
 
@@ -515,15 +520,17 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 		}
 		//持久化
 		if timer == nil {
-			timer=time.NewTimer(time.Millisecond*100)
+			timer=time.NewTimer(indexer.storeUpdateTimeOut)
 		}else {
-			timer.Reset(time.Millisecond*100)
+			timer.Reset(indexer.storeUpdateTimeOut)
 		}
 		select {
 		case indexer.storeUpdateReverseIndexChan <-storereversereq:
 			//log.Println("a reverseindex is send to set")
 		case <-timer.C:
-			types.Logrus.Println("timeout")
+			types.Logrus.WithFields(logrus.Fields{
+				"request":storereversereq.Token,
+			}).Errorln("删除反向索引的持久化请求发送失败")
 		}
 	}
 }

@@ -162,7 +162,8 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
 		engine.indexers[shard].Init(shard, engine.initOptions.StoreIndexBufLen, dbPathForwardIndex, dbPathReverseIndex,
-			engine.initOptions.StoreEngine, engine.initOptions.DocNumber, engine.initOptions.TokenNumber, *engine.initOptions.IndexerOpts)
+			engine.initOptions.StoreEngine, engine.initOptions.DocNumber, engine.initOptions.TokenNumber,
+			engine.initOptions.StoreUpdateTimeOut,*engine.initOptions.IndexerOpts)
 	}
 
 	// 每个索引器内部持久化恢复过程
