@@ -62,7 +62,7 @@ func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitG
 		//field.Unmarshal(v)
 		//indexer.tableLock.totalTokenLen+=field.DocTokenLen
 		//indexer.tableLock.forwardtable[docID]=field
-		//indexer.tableLock.numDocs++
+		indexer.tableLock.numDocs++
 		return nil
 	})
 	//恢复indexer 中tableLock部分字段
