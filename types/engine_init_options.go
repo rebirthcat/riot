@@ -42,6 +42,8 @@ var (
 	}
 	defaultStoreShards = 8
 	defaultStoreChanBufLen=800
+
+	defaultForwardCacheSize=1600000
 )
 
 // EngineOpts init engine options
@@ -111,6 +113,8 @@ type EngineOpts struct {
 	DocNumber uint64
 	TokenNumber uint64
 
+	ForwardIndexCacheSize int
+
 	StoreUpdateTimeOut time.Duration
 
 	Recover bool
@@ -152,6 +156,10 @@ func (options *EngineOpts) Init() {
 		options.StoreUpdateTimeOut=time.Millisecond*100
 	}
 
+	if options.ForwardIndexCacheSize==0 {
+		options.ForwardIndexCacheSize=defaultForwardCacheSize
+	}
+
 	if options.IndexerOpts == nil {
 		options.IndexerOpts = &defaultIndexerOpts
 	}
@@ -167,6 +175,8 @@ func (options *EngineOpts) Init() {
 	if options.IndexerOpts.IndexType==0 {
 		options.IndexerOpts.IndexType=FrequenciesIndex
 	}
+
+
 
 
 

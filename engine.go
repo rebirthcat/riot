@@ -162,7 +162,7 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
 		engine.indexers[shard].Init(shard, engine.initOptions.StoreIndexBufLen, dbPathForwardIndex, dbPathReverseIndex,
-			engine.initOptions.StoreEngine, engine.initOptions.DocNumber, engine.initOptions.TokenNumber,
+			engine.initOptions.StoreEngine, engine.initOptions.DocNumber, engine.initOptions.TokenNumber,engine.initOptions.ForwardIndexCacheSize/engine.initOptions.NumShards,
 			engine.initOptions.StoreUpdateTimeOut,*engine.initOptions.IndexerOpts)
 	}
 
@@ -207,7 +207,7 @@ func (engine *Engine) StoreRecoverOneByOne() {
 
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		engine.indexers[shard].StoreRecoverReverseIndex(engine.initOptions.TokenNumber, nil)
-		engine.indexers[shard].StoreRecoverForwardIndex(engine.initOptions.DocNumber, nil)
+		//engine.indexers[shard].StoreRecoverForwardIndex(engine.initOptions.DocNumber, nil)
 		engine.indexers[shard].StoreUpdateBegin()
 	}
 }
@@ -217,7 +217,7 @@ func (engine *Engine) StoreRecoverConcurrent() {
 	wg := sync.WaitGroup{}
 	wg.Add(engine.initOptions.NumShards * 2)
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		go engine.indexers[shard].StoreRecoverForwardIndex(engine.initOptions.DocNumber, &wg)
+		//go engine.indexers[shard].StoreRecoverForwardIndex(engine.initOptions.DocNumber, &wg)
 		go engine.indexers[shard].StoreRecoverReverseIndex(engine.initOptions.TokenNumber, &wg)
 		engine.indexers[shard].StoreUpdateBegin()
 	}
@@ -227,7 +227,7 @@ func (engine *Engine) StoreRecoverConcurrent() {
 func (engine *Engine) StoreReBuildOneByOne() {
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		engine.indexers[shard].StoreReverseIndexOneTime(nil)
-		engine.indexers[shard].StoreForwardIndexOneTime(nil)
+		//engine.indexers[shard].StoreForwardIndexOneTime(nil)
 		engine.indexers[shard].StoreUpdateBegin()
 	}
 }
@@ -237,7 +237,7 @@ func (engine *Engine) StoreReBuildConcurrent() {
 	wg := sync.WaitGroup{}
 	wg.Add(engine.initOptions.NumShards*2)
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		go engine.indexers[shard].StoreForwardIndexOneTime(&wg)
+		//go engine.indexers[shard].StoreForwardIndexOneTime(&wg)
 		go engine.indexers[shard].StoreReverseIndexOneTime(&wg)
 		engine.indexers[shard].StoreUpdateBegin()
 	}

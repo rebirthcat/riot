@@ -50,27 +50,27 @@ func (indexer *Indexer)OpenReverseIndexDB(dbPath string,StoreEngine string)  {
 
 
 //系统启动时recover索引
-func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitGroup)  {
-	//indexer中的字段
-	if indexer.dbforwardIndex==nil {
-		types.Logrus.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
-	}
-	indexer.dbforwardIndex.ForEach(func(k, v []byte) error {
-		docID := string(k)
-		indexer.tableLock.docsState[docID]=0
-		field:=&DocField{}
-		field.Unmarshal(v)
-		indexer.tableLock.totalTokenLen+=field.DocTokenLen
-		indexer.tableLock.forwardtable[docID]=field
-		indexer.tableLock.numDocs++
-		return nil
-	})
-	//恢复indexer 中tableLock部分字段
-	types.Logrus.Infof("indexer%v forwardindex recover finish",indexer.shardNumber)
-	if wg!=nil {
-		wg.Done()
-	}
-}
+//func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitGroup)  {
+//	//indexer中的字段
+//	if indexer.dbforwardIndex==nil {
+//		types.Logrus.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
+//	}
+//	indexer.dbforwardIndex.ForEach(func(k, v []byte) error {
+//		docID := string(k)
+//		indexer.tableLock.docsState[docID]=0
+//		field:=&DocField{}
+//		field.Unmarshal(v)
+//		indexer.tableLock.totalTokenLen+=field.DocTokenLen
+//		indexer.tableLock.forwardtable[docID]=field
+//		indexer.tableLock.numDocs++
+//		return nil
+//	})
+//	//恢复indexer 中tableLock部分字段
+//	types.Logrus.Infof("indexer%v forwardindex recover finish",indexer.shardNumber)
+//	if wg!=nil {
+//		wg.Done()
+//	}
+//}
 
 
 
@@ -94,20 +94,20 @@ func (indexer *Indexer)StoreRecoverReverseIndex(tokenNumber uint64, wg *sync.Wai
 
 
 //系统启动时rebuild索引
-func (indexer *Indexer)StoreForwardIndexOneTime(wg *sync.WaitGroup)  {
-	if indexer.dbforwardIndex==nil {
-		types.Logrus.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
-	}
-	for docId,docField:=range indexer.tableLock.forwardtable{
-
-		buf,_:=docField.Marshal(nil)
-		indexer.dbforwardIndex.Set([]byte(docId), buf)
-		//atomic.AddUint64(&indexer.numDocsStore, 1)
-	}
-	if wg!=nil {
-		wg.Done()
-	}
-}
+//func (indexer *Indexer)StoreForwardIndexOneTime(wg *sync.WaitGroup)  {
+//	if indexer.dbforwardIndex==nil {
+//		types.Logrus.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
+//	}
+//	for docId,docField:=range indexer.tableLock.forwardtable{
+//
+//		buf,_:=docField.Marshal(nil)
+//		indexer.dbforwardIndex.Set([]byte(docId), buf)
+//		//atomic.AddUint64(&indexer.numDocsStore, 1)
+//	}
+//	if wg!=nil {
+//		wg.Done()
+//	}
+//}
 
 func (indexer *Indexer)StoreReverseIndexOneTime(wg *sync.WaitGroup)  {
 	if indexer.dbRevertIndex==nil {

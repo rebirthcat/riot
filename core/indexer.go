@@ -20,6 +20,7 @@ Package core is riot core
 package core
 
 import (
+	"github.com/hashicorp/golang-lru"
 	"github.com/rebirthcat/riot/distscore"
 	"github.com/rebirthcat/riot/geofilter"
 	"github.com/sirupsen/logrus"
@@ -43,7 +44,8 @@ type Indexer struct {
 	tableLock struct {
 		sync.RWMutex
 		table     map[string]*KeywordIndices
-		forwardtable map[string] *DocField
+		forwardCache *lru.TwoQueueCache
+		//forwardtable map[string] *DocField
 		docsState map[string]int // nil: 表示无状态记录，0: 存在于索引中，1: 等待删除，2: 等待加入
 		// 单个分片的文档总数（精确值）
 		numDocs uint64
@@ -136,7 +138,7 @@ func (indexer *Indexer)GetNumTotalTokenLen()uint64  {
 
 // Init 初始化索引器
 func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex string,dbPathReverseIndex string,
-	StoreEngine string, docNumber uint64,tokenNumber uint64, storeUpdateTimeOut time.Duration,options types.IndexerOpts) {
+	StoreEngine string, docNumber uint64,tokenNumber uint64, ForwardCacheSize int,storeUpdateTimeOut time.Duration,options types.IndexerOpts) {
 	if indexer.initialized == true {
 		types.Logrus.Fatal("The Indexer can not be initialized twice.")
 	}
@@ -146,7 +148,8 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex st
 
 	indexer.tableLock.table = make(map[string]*KeywordIndices,tokenNumber)
 	indexer.tableLock.docsState = make(map[string]int,docNumber)
-	indexer.tableLock.forwardtable=make(map[string]*DocField,docNumber)
+	//indexer.tableLock.forwardtable=make(map[string]*DocField,docNumber)
+	indexer.tableLock.forwardCache,_=lru.New2Q(ForwardCacheSize)
 
 	indexer.addCacheLock.addCache = make(
 		[]*types.DocIndex, indexer.initOptions.DocCacheSize)
@@ -293,24 +296,23 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			docfield.DocTokenLen=doc.TokenLen
 			indexer.tableLock.totalTokenLen += doc.TokenLen
 		}
-		indexer.tableLock.forwardtable[doc.DocId]=docfield
+		//indexer.tableLock.forwardtable[doc.DocId]=docfield
 		var timer *time.Timer
-		if indexer.storeUpdateBegin {
-			storeforwardreq:=StoreForwardIndexReq{
-				DocID:doc.DocId,
-				Remove:false,
-				Field:docfield,
-			}
-			timer = time.NewTimer(indexer.storeUpdateTimeOut)
-			select {
-			case indexer.storeUpdateForwardIndexChan <- storeforwardreq:
-				//log
-			case <-timer.C:
-				types.Logrus.WithFields(logrus.Fields{
-					"request":storeforwardreq.DocID,
-				}).Errorln("更新正向索引的持久化请求发送失败")
-			}
+		//if indexer.storeUpdateBegin {
+		storeforwardreq:=StoreForwardIndexReq{
+			DocID:doc.DocId,
+			Remove:false,
+			Field:docfield,
 		}
+		timer = time.NewTimer(indexer.storeUpdateTimeOut)
+		select {
+		case indexer.storeUpdateForwardIndexChan <- storeforwardreq:
+		case <-timer.C:
+			types.Logrus.WithFields(logrus.Fields{
+				"request":storeforwardreq.DocID,
+			}).Errorln("更新正向索引的持久化请求发送失败")
+		}
+		//}
 
 		docIdIsNew := true
 		for _, keyword := range doc.Keywords {
@@ -435,15 +437,28 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 
 	// 更新文档关键词总长度，删除文档状态
 	var timer *time.Timer
+	var docField DocField
 	for _, docId := range *docs {
 		//先删除状态
 		delete(indexer.tableLock.docsState, docId)
-		//更新totalTokenLen
+		value,ok:=indexer.tableLock.forwardCache.Get(docId)
+		//如果缓存中存在，则删除缓存，然后删除持久化文件中对应的记录
+		if ok {
+			docField,_=value.(DocField)
+			indexer.tableLock.forwardCache.Remove(docId)
+		}else {
+			docfieldByte,errget:=indexer.dbforwardIndex.Get([]byte(docId))
+			if errget!=nil {
+				//log
+			}
+			docField.Unmarshal(docfieldByte)
+		}
 		if indexer.initOptions.IndexType!=types.DocIdsIndex {
-			indexer.tableLock.totalTokenLen -= indexer.tableLock.forwardtable[docId].DocTokenLen
+			indexer.tableLock.totalTokenLen-=docField.DocTokenLen
+			//indexer.tableLock.totalTokenLen -= indexer.tableLock.forwardtable[docId].DocTokenLen
 		}
 		//删除正向索引
-		delete(indexer.tableLock.forwardtable,docId)
+		//delete(indexer.tableLock.forwardtable,docId)
 		//发出删除的持久化请求
 		storeforwardreq:=StoreForwardIndexReq{
 			DocID:docId,
@@ -591,7 +606,7 @@ func (indexer *Indexer) internalLookup(
 	for iTable := 0; iTable < len(table); iTable++ {
 		indexPointers[iTable] = indexer.getIndexLen(table[iTable]) - 1
 	}
-
+	var docField DocField
 	// 平均文本关键词长度，用于计算BM25
 	avgDocLength := indexer.tableLock.totalTokenLen / float32(indexer.tableLock.numDocs)
 	for ; indexPointers[0] >= 0; indexPointers[0]-- {
@@ -630,8 +645,19 @@ func (indexer *Indexer) internalLookup(
 		}
 
 		if found {
+			value,ok:=indexer.tableLock.forwardCache.Get(baseDocId)
+			if ok {
+				docField,_=value.(DocField)
+			}else {
+				docFieldByte,_:=indexer.dbforwardIndex.Get([]byte(baseDocId))
+				_,errunmar:=docField.Unmarshal(docFieldByte)
+				if errunmar!=nil {
+					indexer.tableLock.forwardCache.Add(baseDocId,docField)
+				}
+			}
+
 			if geoFilter!=nil {
-				if !geoFilter.Filter(indexer.tableLock.forwardtable[baseDocId].GeoHash) {
+				if !geoFilter.Filter(docField.GeoHash) {
 					continue
 				}
 			}
@@ -687,7 +713,7 @@ func (indexer *Indexer) internalLookup(
 				if indexer.initOptions.IndexType == types.LocsIndex ||
 					indexer.initOptions.IndexType == types.FrequenciesIndex {
 					//d := indexer.tableLock.docTokenLens[baseDocId]
-					d := indexer.tableLock.forwardtable[baseDocId].DocTokenLen
+					d := docField.DocTokenLen
 					for i, t := range table[:len(tokens)] {
 						var frequency float32
 						if indexer.initOptions.IndexType == types.LocsIndex {
@@ -710,8 +736,7 @@ func (indexer *Indexer) internalLookup(
 				indexedDoc.Scores = float32(bm25)
 			}else {
 				//用户自定义评分规则，分数小于0则剔除
-				scores:=distScoreCriteria.Score(indexer.tableLock.forwardtable[indexedDoc.DocId].Lat,
-					indexer.tableLock.forwardtable[indexedDoc.DocId].Lng)
+				scores:=distScoreCriteria.Score(docField.Lat,docField.Lng)
 				if scores<0 {
 					continue
 				}
