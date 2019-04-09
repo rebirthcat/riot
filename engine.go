@@ -207,7 +207,7 @@ func (engine *Engine) StoreRecoverOneByOne() {
 
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		engine.indexers[shard].StoreRecoverReverseIndex(engine.initOptions.TokenNumber, nil)
-		//engine.indexers[shard].StoreRecoverForwardIndex(engine.initOptions.DocNumber, nil)
+		engine.indexers[shard].StoreRecoverForwardIndex(engine.initOptions.DocNumber, nil)
 		engine.indexers[shard].StoreUpdateBegin()
 	}
 }
@@ -217,7 +217,7 @@ func (engine *Engine) StoreRecoverConcurrent() {
 	wg := sync.WaitGroup{}
 	wg.Add(engine.initOptions.NumShards * 2)
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		//go engine.indexers[shard].StoreRecoverForwardIndex(engine.initOptions.DocNumber, &wg)
+		go engine.indexers[shard].StoreRecoverForwardIndex(engine.initOptions.DocNumber, &wg)
 		go engine.indexers[shard].StoreRecoverReverseIndex(engine.initOptions.TokenNumber, &wg)
 		engine.indexers[shard].StoreUpdateBegin()
 	}

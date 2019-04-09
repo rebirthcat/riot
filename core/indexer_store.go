@@ -50,27 +50,27 @@ func (indexer *Indexer)OpenReverseIndexDB(dbPath string,StoreEngine string)  {
 
 
 //系统启动时recover索引
-//func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitGroup)  {
-//	//indexer中的字段
-//	if indexer.dbforwardIndex==nil {
-//		types.Logrus.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
-//	}
-//	indexer.dbforwardIndex.ForEach(func(k, v []byte) error {
-//		docID := string(k)
-//		indexer.tableLock.docsState[docID]=0
-//		field:=&DocField{}
-//		field.Unmarshal(v)
-//		indexer.tableLock.totalTokenLen+=field.DocTokenLen
-//		indexer.tableLock.forwardtable[docID]=field
-//		indexer.tableLock.numDocs++
-//		return nil
-//	})
-//	//恢复indexer 中tableLock部分字段
-//	types.Logrus.Infof("indexer%v forwardindex recover finish",indexer.shardNumber)
-//	if wg!=nil {
-//		wg.Done()
-//	}
-//}
+func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitGroup)  {
+	//indexer中的字段
+	if indexer.dbforwardIndex==nil {
+		types.Logrus.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
+	}
+	indexer.dbforwardIndex.ForEach(func(k, v []byte) error {
+		docID := string(k)
+		indexer.tableLock.docsState[docID]=0
+		//field:=&DocField{}
+		//field.Unmarshal(v)
+		//indexer.tableLock.totalTokenLen+=field.DocTokenLen
+		//indexer.tableLock.forwardtable[docID]=field
+		//indexer.tableLock.numDocs++
+		return nil
+	})
+	//恢复indexer 中tableLock部分字段
+	types.Logrus.Infof("indexer%v forwardindex recover finish",indexer.shardNumber)
+	if wg!=nil {
+		wg.Done()
+	}
+}
 
 
 
