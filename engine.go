@@ -433,7 +433,7 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 		freeObjToPool(rankOutputArr)
 		return
 	}
-	types.Logrus.Infoln(rankOutputArr)
+	//types.Logrus.Infoln(rankOutputArr)
 	// 再排序 使用堆排序
 	//定义结果数组
 	var res []types.ScoredID
