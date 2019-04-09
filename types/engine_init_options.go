@@ -105,7 +105,8 @@ type EngineOpts struct {
 
 	StoreFolder string `toml:"store_folder"`
 	//StoreShards int    `toml:"store_shards"`
-	StoreEngine string `toml:"store_engine"`
+	ForwardIndexStoreEngine  string
+	ReverseIndexStoreEngine string `toml:"store_engine"`
 	//在进行持久化恢复过程和重建一次性写入持久化过程中是否启动多协程模式，这个取决于机器配置和索引数量
 	StoreConcurrent bool
 	//IDOnly bool `toml:"id_only"`

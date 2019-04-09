@@ -162,7 +162,8 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
 		engine.indexers[shard].Init(shard, engine.initOptions.StoreIndexBufLen, dbPathForwardIndex, dbPathReverseIndex,
-			engine.initOptions.StoreEngine, engine.initOptions.DocNumber, engine.initOptions.TokenNumber,engine.initOptions.ForwardIndexCacheSize/engine.initOptions.NumShards,
+			engine.initOptions.ForwardIndexStoreEngine, engine.initOptions.ReverseIndexStoreEngine, engine.initOptions.DocNumber,
+			engine.initOptions.TokenNumber,engine.initOptions.ForwardIndexCacheSize/engine.initOptions.NumShards,
 			engine.initOptions.StoreUpdateTimeOut,*engine.initOptions.IndexerOpts)
 	}
 

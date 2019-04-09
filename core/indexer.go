@@ -138,7 +138,8 @@ func (indexer *Indexer)GetNumTotalTokenLen()uint64  {
 
 // Init 初始化索引器
 func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex string,dbPathReverseIndex string,
-	StoreEngine string, docNumber uint64,tokenNumber uint64, ForwardCacheSize int,storeUpdateTimeOut time.Duration,options types.IndexerOpts) {
+	ForwardIndexStoreEngine string, ReverseIndexStoreEngine string, docNumber uint64,tokenNumber uint64,
+	ForwardCacheSize int,storeUpdateTimeOut time.Duration,options types.IndexerOpts) {
 	if indexer.initialized == true {
 		types.Logrus.Fatal("The Indexer can not be initialized twice.")
 	}
@@ -163,12 +164,12 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex st
 	indexer.shardNumber=shard
 
 	var erropen error
-	indexer.dbforwardIndex, erropen= store.OpenStore(dbPathForwardIndex, StoreEngine)
+	indexer.dbforwardIndex, erropen= store.OpenStore(dbPathForwardIndex, ForwardIndexStoreEngine)
 	if indexer.dbforwardIndex == nil || erropen != nil {
 		types.Logrus.Fatal("Unable to open database ", dbPathForwardIndex, ": ", erropen)
 	}
 
-	indexer.dbRevertIndex,erropen=store.OpenStore(dbPathReverseIndex,StoreEngine)
+	indexer.dbRevertIndex,erropen=store.OpenStore(dbPathReverseIndex,ReverseIndexStoreEngine)
 	if indexer.dbRevertIndex==nil||erropen!=nil {
 		types.Logrus.Fatal("Unable to open database ", dbPathReverseIndex, ": ", erropen)
 	}
