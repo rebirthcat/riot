@@ -433,7 +433,7 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 		freeObjToPool(rankOutputArr)
 		return
 	}
-
+	types.Logrus.Infoln(rankOutputArr)
 	// 再排序 使用堆排序
 	//定义结果数组
 	var res []types.ScoredID
@@ -447,6 +447,7 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 		Arr:        []types.HeapNode{},
 		IsSmallTop: request.OrderReverse,
 	}
+
 	numshard := len(rankOutputArr)
 	for i := 0; i < numshard; i++ {
 		if len(rankOutputArr[i]) > 0 {

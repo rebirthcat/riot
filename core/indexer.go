@@ -648,9 +648,12 @@ func (indexer *Indexer) internalLookup(
 			value,ok:=indexer.tableLock.forwardCache.Get(baseDocId)
 			if ok {
 				docField,_=value.(DocField)
+				types.Logrus.Infoln(baseDocId+":"+docField.GeoHash)
 			}else {
 				docFieldByte,_:=indexer.dbforwardIndex.Get([]byte(baseDocId))
 				_,errunmar:=docField.Unmarshal(docFieldByte)
+				types.Logrus.Infoln(baseDocId+":"+docField.GeoHash)
+				//logrus.Infoln(baseDocId+":"+docField.GeoHash)
 				if errunmar!=nil {
 					indexer.tableLock.forwardCache.Add(baseDocId,docField)
 				}
