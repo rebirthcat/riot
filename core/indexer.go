@@ -651,7 +651,7 @@ func (indexer *Indexer) internalLookup(
 				docField,_=value.(DocField)
 			}else {
 				docFieldByte,errget:=indexer.dbforwardIndex.Get([]byte(baseDocId))
-				if errget!=nil {
+				if errget!=nil||docFieldByte==nil||len(docFieldByte)==0 {
 					types.Logrus.Errorln(errget)
 				}else {
 					_,errunmar:=docField.Unmarshal(docFieldByte)
