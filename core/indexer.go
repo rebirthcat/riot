@@ -650,10 +650,14 @@ func (indexer *Indexer) internalLookup(
 			if ok {
 				docField,_=value.(DocField)
 			}else {
-				docFieldByte,_:=indexer.dbforwardIndex.Get([]byte(baseDocId))
-				_,errunmar:=docField.Unmarshal(docFieldByte)
-				if errunmar!=nil {
-					indexer.tableLock.forwardCache.Add(baseDocId,docField)
+				docFieldByte,errget:=indexer.dbforwardIndex.Get([]byte(baseDocId))
+				if errget!=nil {
+					types.Logrus.Errorln(errget)
+				}else {
+					_,errunmar:=docField.Unmarshal(docFieldByte)
+					if errunmar!=nil {
+						indexer.tableLock.forwardCache.Add(baseDocId,docField)
+					}
 				}
 			}
 
