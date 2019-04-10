@@ -42,8 +42,6 @@ var (
 	}
 	defaultStoreShards = 8
 	defaultStoreChanBufLen=800
-
-	defaultForwardCacheSize=1600000
 )
 
 // EngineOpts init engine options
@@ -105,16 +103,13 @@ type EngineOpts struct {
 
 	StoreFolder string `toml:"store_folder"`
 	//StoreShards int    `toml:"store_shards"`
-	ForwardIndexStoreEngine  string
-	ReverseIndexStoreEngine string `toml:"store_engine"`
+	StoreEngine string `toml:"store_engine"`
 	//在进行持久化恢复过程和重建一次性写入持久化过程中是否启动多协程模式，这个取决于机器配置和索引数量
 	StoreConcurrent bool
 	//IDOnly bool `toml:"id_only"`
 	//第一次启动时预估文档数量和索引关键词数量，恢复启动时自动从文件中读出准确数量
 	DocNumber uint64
 	TokenNumber uint64
-
-	ForwardIndexCacheSize int
 
 	StoreUpdateTimeOut time.Duration
 
@@ -157,10 +152,6 @@ func (options *EngineOpts) Init() {
 		options.StoreUpdateTimeOut=time.Millisecond*100
 	}
 
-	if options.ForwardIndexCacheSize==0 {
-		options.ForwardIndexCacheSize=defaultForwardCacheSize
-	}
-
 	if options.IndexerOpts == nil {
 		options.IndexerOpts = &defaultIndexerOpts
 	}
@@ -176,8 +167,6 @@ func (options *EngineOpts) Init() {
 	if options.IndexerOpts.IndexType==0 {
 		options.IndexerOpts.IndexType=FrequenciesIndex
 	}
-
-
 
 
 

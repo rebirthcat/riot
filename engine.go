@@ -162,8 +162,7 @@ func (engine *Engine) Init(options types.EngineOpts) {
 		dbPathReverseIndex := engine.initOptions.StoreFolder + "/" +
 			StoreFilePrefix + ".reversedindex." + strconv.Itoa(shard)
 		engine.indexers[shard].Init(shard, engine.initOptions.StoreIndexBufLen, dbPathForwardIndex, dbPathReverseIndex,
-			engine.initOptions.ForwardIndexStoreEngine, engine.initOptions.ReverseIndexStoreEngine, engine.initOptions.DocNumber,
-			engine.initOptions.TokenNumber,engine.initOptions.ForwardIndexCacheSize/engine.initOptions.NumShards,
+			engine.initOptions.StoreEngine, engine.initOptions.DocNumber, engine.initOptions.TokenNumber,
 			engine.initOptions.StoreUpdateTimeOut,*engine.initOptions.IndexerOpts)
 	}
 
@@ -228,7 +227,7 @@ func (engine *Engine) StoreRecoverConcurrent() {
 func (engine *Engine) StoreReBuildOneByOne() {
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		engine.indexers[shard].StoreReverseIndexOneTime(nil)
-		//engine.indexers[shard].StoreForwardIndexOneTime(nil)
+		engine.indexers[shard].StoreForwardIndexOneTime(nil)
 		engine.indexers[shard].StoreUpdateBegin()
 	}
 }
@@ -238,7 +237,7 @@ func (engine *Engine) StoreReBuildConcurrent() {
 	wg := sync.WaitGroup{}
 	wg.Add(engine.initOptions.NumShards*2)
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
-		//go engine.indexers[shard].StoreForwardIndexOneTime(&wg)
+		go engine.indexers[shard].StoreForwardIndexOneTime(&wg)
 		go engine.indexers[shard].StoreReverseIndexOneTime(&wg)
 		engine.indexers[shard].StoreUpdateBegin()
 	}
@@ -434,7 +433,7 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 		freeObjToPool(rankOutputArr)
 		return
 	}
-	//types.Logrus.Infoln(rankOutputArr)
+
 	// 再排序 使用堆排序
 	//定义结果数组
 	var res []types.ScoredID
@@ -448,7 +447,6 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 		Arr:        []types.HeapNode{},
 		IsSmallTop: request.OrderReverse,
 	}
-
 	numshard := len(rankOutputArr)
 	for i := 0; i < numshard; i++ {
 		if len(rankOutputArr[i]) > 0 {
