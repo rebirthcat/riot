@@ -151,9 +151,9 @@ func (engine *Engine) Init(options types.EngineOpts) {
 			engine.loaded = true
 		}
 		// 初始化停用词
-		engine.stopTokens.Init(options.StopTokenFile)
-	}
 
+	}
+	engine.stopTokens.Init(options.StopTokenFile)
 	// 初始化索引器
 	for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 		engine.indexers = append(engine.indexers, &core.Indexer{})
