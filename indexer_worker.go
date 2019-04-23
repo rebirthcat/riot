@@ -68,6 +68,12 @@ func (engine *Engine) indexerLookup(shard int) {
 			request.tokens, request.labels,
 			request.docIds, request.countDocsOnly, request.disScoreCriteria, request.geoFilter, request.orderReverse)
 
+		temp:=[]float32{}
+		for _,obj:=range docs{
+			temp=append(temp,obj.Scores)
+		}
+		types.Logrus.Error(temp)
+
 		request.rankerReturnChan <- rankerReturnReq{
 			docs: docs, numDocs: numDocs}
 
