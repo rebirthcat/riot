@@ -735,6 +735,11 @@ func (indexer *Indexer) internalLookup(
 			sort.Sort(sort.Reverse(types.ScoredIDs(docs)))
 		}
 	}
+	temp:=[]float32{}
+	for _,obj:=range docs{
+		temp=append(temp,obj.Scores)
+	}
+	types.Logrus.Infoln(temp)
 	return
 }
 
