@@ -477,9 +477,10 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 				ShareNum:     i,
 				IndexPointer: 0,
 			}
-			heap.Push(h, node)
+			h.Arr=append(h.Arr,node)
 		}
 	}
+	heap.Init(h)
 	index := 0
 	for index < len(res) {
 		n := heap.Pop(h)
