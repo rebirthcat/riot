@@ -337,6 +337,28 @@ func (engine *Engine) Segment(content string) (keywords []string) {
 	return
 }
 
+func (engine *Engine)FilterStopTokens(tokens []string)([]string)  {
+
+	stopTokenCount:=0
+	for _, token := range tokens {
+		if engine.stopTokens.IsStopToken(token) {
+			stopTokenCount++
+		}
+	}
+	if stopTokenCount>0 {
+		keywords:=make([]string,0,len(tokens)-stopTokenCount)
+		for _, token := range tokens {
+			if !engine.stopTokens.IsStopToken(token) {
+				keywords = append(keywords, token)
+			}
+		}
+		return keywords
+	}else {
+		return tokens
+	}
+}
+
+
 // Tokens get the engine tokens
 func (engine *Engine) Tokens(request types.SearchReq) (tokens []string) {
 	// 收集关键词
