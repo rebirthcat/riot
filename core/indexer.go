@@ -562,6 +562,11 @@ func (indexer *Indexer) Lookup(
 
 	scoredIDs,numDocs=indexer.internalLookup(keywords, tokens, docIds, countDocsOnly,distScoreCriteria,geoFilter,orderReverse)
 	//scoredIDs=[]*types.ScoredID(docs)
+	temp:=[]float32{}
+	for _,obj:=range scoredIDs{
+		temp=append(temp,obj.Scores)
+	}
+	types.Logrus.Errorln(temp)
 	return
 }
 //a
@@ -735,11 +740,11 @@ func (indexer *Indexer) internalLookup(
 			sort.Sort(sort.Reverse(types.ScoredIDs(docs)))
 		}
 	}
-	temp:=[]float32{}
-	for _,obj:=range docs{
-		temp=append(temp,obj.Scores)
-	}
-	types.Logrus.Infoln(temp)
+	//temp:=[]float32{}
+	//for _,obj:=range docs{
+	//	temp=append(temp,obj.Scores)
+	//}
+	//types.Logrus.Infoln(temp)
 	return
 }
 
