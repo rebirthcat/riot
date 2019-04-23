@@ -569,12 +569,6 @@ func (indexer *Indexer) Lookup(
 			sort.Sort(sort.Reverse(types.ScoredIDs(scoredIDs)))
 		}
 	}
-	//scoredIDs=[]*types.ScoredID(docs)
-	temp:=[]float32{}
-	for _,obj:=range scoredIDs{
-		temp=append(temp,obj.Scores)
-	}
-	types.Logrus.Errorln(temp)
 	return
 }
 //a
@@ -740,19 +734,6 @@ func (indexer *Indexer) internalLookup(
 		}
 	}
 
-	//排序
-	//if !countDocsOnly {
-	//	if orderReverse {
-	//		sort.Sort(types.ScoredIDs(docs))
-	//	}else {
-	//		sort.Sort(sort.Reverse(types.ScoredIDs(docs)))
-	//	}
-	//}
-	//temp:=[]float32{}
-	//for _,obj:=range docs{
-	//	temp=append(temp,obj.Scores)
-	//}
-	//types.Logrus.Infoln(temp)
 	return
 }
 

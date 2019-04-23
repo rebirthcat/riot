@@ -455,17 +455,17 @@ func (engine *Engine) RankID(request types.SearchReq, tokens []string, rankerRet
 		freeObjToPool(rankOutputArr)
 		return
 	}
-	logarr:=make([][]float32,len(rankOutputArr))
-	for i := 0; i < len(rankOutputArr); i++ {
-		logarr[i]=make([]float32,len(rankOutputArr[i]))
-		for j,obj:=range rankOutputArr[i]{
-			logarr[i][j]=obj.Scores
-		}
-	}
 
-	types.Logrus.Infoln(logarr)
-
-
+	//logarr:=make([][]float32,len(rankOutputArr))
+	//for i := 0; i < len(rankOutputArr); i++ {
+	//	logarr[i]=make([]float32,len(rankOutputArr[i]))
+	//	for j,obj:=range rankOutputArr[i]{
+	//		logarr[i][j]=obj.Scores
+	//	}
+	//}
+	//
+	//types.Logrus.Infoln(logarr)
+	//
 
 	// 再排序 使用堆排序
 	//定义结果数组
