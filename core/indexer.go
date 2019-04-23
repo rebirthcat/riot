@@ -561,6 +561,14 @@ func (indexer *Indexer) Lookup(
 	copy(keywords[len(tokens):], labels)
 
 	scoredIDs,numDocs=indexer.internalLookup(keywords, tokens, docIds, countDocsOnly,distScoreCriteria,geoFilter,orderReverse)
+
+	if !countDocsOnly {
+		if orderReverse {
+			sort.Sort(types.ScoredIDs(scoredIDs))
+		}else {
+			sort.Sort(sort.Reverse(types.ScoredIDs(scoredIDs)))
+		}
+	}
 	//scoredIDs=[]*types.ScoredID(docs)
 	temp:=[]float32{}
 	for _,obj:=range scoredIDs{
@@ -733,13 +741,13 @@ func (indexer *Indexer) internalLookup(
 	}
 
 	//排序
-	if !countDocsOnly {
-		if orderReverse {
-			sort.Sort(types.ScoredIDs(docs))
-		}else {
-			sort.Sort(sort.Reverse(types.ScoredIDs(docs)))
-		}
-	}
+	//if !countDocsOnly {
+	//	if orderReverse {
+	//		sort.Sort(types.ScoredIDs(docs))
+	//	}else {
+	//		sort.Sort(sort.Reverse(types.ScoredIDs(docs)))
+	//	}
+	//}
 	//temp:=[]float32{}
 	//for _,obj:=range docs{
 	//	temp=append(temp,obj.Scores)
