@@ -318,6 +318,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			if !foundKeyword {
 				// 如果没找到该搜索键则加入
 				ti := KeywordIndices{}
+				logrus.Errorln(indexer.initOptions.IndexType)
 				switch indexer.initOptions.IndexType {
 				case types.DocIdsIndex:
 					ti.frequencies=nil
