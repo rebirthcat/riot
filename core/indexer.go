@@ -319,6 +319,9 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 				// 如果没找到该搜索键则加入
 				ti := KeywordIndices{}
 				switch indexer.initOptions.IndexType {
+				case types.DocIdsIndex:
+					ti.frequencies=nil
+					ti.locations=nil
 				case types.LocsIndex:
 					ti.locations = [][]int32{keyword.Starts}
 				case types.FrequenciesIndex:
@@ -336,14 +339,14 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 			indexPointers[keyword.Text] = position
 
 			switch indexer.initOptions.IndexType {
+			case types.DocIdsIndex:
+				indices.frequencies=nil
+				indices.locations=nil
 			case types.LocsIndex:
-
 				indices.locations = append(indices.locations, []int32{})
 				copy(indices.locations[position+1:], indices.locations[position:])
 				indices.locations[position] = keyword.Starts
-
 			case types.FrequenciesIndex:
-
 				indices.frequencies = append(indices.frequencies, float32(0))
 				copy(indices.frequencies[position+1:], indices.frequencies[position:])
 				indices.frequencies[position] = keyword.Frequency
@@ -476,6 +479,9 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 			if indices.docIds[indicesPointer] < (*docs)[docsPointer] {
 				if indicesTop != indicesPointer {
 					switch indexer.initOptions.IndexType {
+					case types.DocIdsIndex:
+						indices.frequencies=nil
+						indices.locations=nil
 					case types.LocsIndex:
 						indices.locations[indicesTop] = indices.locations[indicesPointer]
 					case types.FrequenciesIndex:
@@ -497,6 +503,9 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 
 		if indicesTop != indicesPointer {
 			switch indexer.initOptions.IndexType {
+			case types.DocIdsIndex:
+				indices.frequencies=nil
+				indices.locations=nil
 			case types.LocsIndex:
 				indices.locations = append(
 					indices.locations[:indicesTop], indices.locations[indicesPointer:]...)
