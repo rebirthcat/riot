@@ -32,7 +32,7 @@ var (
 	defaultNumRankerThreads  = runtime.NumCPU()
 
 	defaultIndexerOpts = IndexerOpts{
-		IndexType:      FrequenciesIndex,
+		IndexType:      DocIdsIndex,
 		DocCacheSize:defaultDocCacheSize,
 		BM25Parameters: &defaultBM25Parameters,
 	}

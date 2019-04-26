@@ -28,7 +28,7 @@ const (
 	LocsIndex = 2
 
 	// 默认插入索引表文档 CACHE SIZE
-	defaultDocCacheSize = 100
+	defaultDocCacheSize = 10000
 )
 
 // IndexerOpts 初始化索引器选项
