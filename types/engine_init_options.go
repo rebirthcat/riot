@@ -163,11 +163,4 @@ func (options *EngineOpts) Init() {
 	if options.IndexerOpts.DocCacheSize==0 {
 		options.IndexerOpts.DocCacheSize=defaultDocCacheSize
 	}
-
-	if options.IndexerOpts.IndexType==0 {
-		options.IndexerOpts.IndexType=FrequenciesIndex
-	}
-
-
-
 }
