@@ -147,12 +147,17 @@ func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
 }
 
 func (indexer *Indexer) StoreUpdateReverseIndexWorker() {
+	
+
 	if indexer.dbRevertIndex==nil {
 		types.Logrus.Fatalf("indexer %v dbreverse is not open",indexer.shardNumber)
 	}
 	for {
 		request := <-indexer.storeUpdateReverseIndexChan
-		buf,_:=request.Indices.Marshal(nil)
+		buf,err:=request.Indices.Marshal(nil)
+		if err != nil {
+			continue
+		}
 		indexer.dbRevertIndex.Set([]byte(request.Token),buf)
 	}
 }

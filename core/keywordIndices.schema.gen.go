@@ -112,6 +112,11 @@ func (d *KeywordIndices) Size() (s uint64) {
 	return
 }
 func (d *KeywordIndices) Marshal(buf []byte) ([]byte, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			return
+		}
+	}()
 	size := d.Size()
 	{
 		if uint64(cap(buf)) >= size {
@@ -257,6 +262,11 @@ func (d *KeywordIndices) Marshal(buf []byte) ([]byte, error) {
 }
 
 func (d *KeywordIndices) Unmarshal(buf []byte) (uint64, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			return
+		}
+	}()
 	i := uint64(0)
 
 	{
