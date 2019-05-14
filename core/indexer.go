@@ -361,9 +361,9 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 				storereversereq.Indices=indices
 				//发送至持久化
 				if timer==nil {
-					timer=time.NewTimer(time.Millisecond*100)
+					timer=time.NewTimer(indexer.storeUpdateTimeOut)
 				}else {
-					timer.Reset(time.Millisecond*100)
+					timer.Reset(indexer.storeUpdateTimeOut)
 				}
 				select {
 				case indexer.storeUpdateReverseIndexChan <- storereversereq:
