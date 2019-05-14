@@ -40,6 +40,11 @@ func (d *DocField) Size() (s uint64) {
 	return
 }
 func (d *DocField) Marshal(buf []byte) ([]byte, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			return
+		}
+	}()
 	size := d.Size()
 	{
 		if uint64(cap(buf)) >= size {
@@ -128,6 +133,11 @@ func (d *DocField) Marshal(buf []byte) ([]byte, error) {
 }
 
 func (d *DocField) Unmarshal(buf []byte) (uint64, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			return
+		}
+	}()
 	i := uint64(0)
 
 	{
