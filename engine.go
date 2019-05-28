@@ -256,14 +256,14 @@ func (engine *Engine) StoreReBuildConcurrent() {
 //      1. 这个函数是线程安全的，请尽可能并发调用以提高索引速度
 //      2. 这个函数调用是非同步的，也就是说在函数返回时有可能文档还没有加入索引中，因此
 //         如果立刻调用Search可能无法查询到这个文档。强制刷新索引请调用FlushIndex函数。
-func (engine *Engine) IndexDoc(docId string, data types.DocData,
+func (engine *Engine) IndexDoc(docId uint64, data types.DocData,
 	forceUpdate ...bool) error {
 	engine.index(docId, data, forceUpdate...)
 	return nil
 }
 
 // Index add the document to the index
-func (engine *Engine) index(docId string, data types.DocData,
+func (engine *Engine) index(docId uint64, data types.DocData,
 	forceUpdate ...bool) {
 
 	var force bool
@@ -275,7 +275,7 @@ func (engine *Engine) index(docId string, data types.DocData,
 	engine.internalIndexDoc(docId, data, force)
 }
 
-func (engine *Engine) internalIndexDoc(docId string, data types.DocData,
+func (engine *Engine) internalIndexDoc(docId uint64, data types.DocData,
 	forceUpdate bool) {
 
 	if !engine.initialized {
@@ -298,7 +298,7 @@ func (engine *Engine) internalIndexDoc(docId string, data types.DocData,
 //      1. 这个函数是线程安全的，请尽可能并发调用以提高索引速度
 //      2. 这个函数调用是非同步的，也就是说在函数返回时有可能文档还没有加入索引中，因此
 //         如果立刻调用 Search 可能无法查询到这个文档。强制刷新索引请调用 FlushIndex 函数。
-func (engine *Engine) RemoveDoc(docId string, forceUpdate ...bool) error {
+func (engine *Engine) RemoveDoc(docId uint64, forceUpdate ...bool) error {
 	var force bool
 	if len(forceUpdate) > 0 {
 		force = forceUpdate[0]

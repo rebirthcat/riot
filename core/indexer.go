@@ -43,8 +43,8 @@ type Indexer struct {
 	tableLock struct {
 		sync.RWMutex
 		table     map[string]*KeywordIndices
-		forwardtable map[string] *DocField
-		docsState map[string]int // nil: 表示无状态记录，0: 存在于索引中，1: 等待删除，2: 等待加入
+		forwardtable map[uint64] *DocField
+		docsState map[uint64]int // nil: 表示无状态记录，0: 存在于索引中，1: 等待删除，2: 等待加入
 		// 单个分片的文档总数（精确值）
 		numDocs uint64
 		// docIDs *hset.Hset
@@ -145,14 +145,14 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex st
 	indexer.initialized = true
 
 	indexer.tableLock.table = make(map[string]*KeywordIndices,tokenNumber)
-	indexer.tableLock.docsState = make(map[string]int,docNumber)
-	indexer.tableLock.forwardtable=make(map[string]*DocField,docNumber)
+	indexer.tableLock.docsState = make(map[uint64]int,docNumber)
+	indexer.tableLock.forwardtable=make(map[uint64]*DocField,docNumber)
 
 	indexer.addCacheLock.addCache = make(
 		[]*types.DocIndex, indexer.initOptions.DocCacheSize)
 
 	indexer.removeCacheLock.removeCache = make(
-		[]string, indexer.initOptions.DocCacheSize)
+		[]uint64, indexer.initOptions.DocCacheSize)
 
 	indexer.storeUpdateForwardIndexChan=make(chan StoreForwardIndexReq,StoreChanBufLen)
 	indexer.storeUpdateReverseIndexChan=make(chan StoreReverseIndexReq,StoreChanBufLen)
@@ -172,13 +172,13 @@ func (indexer *Indexer) Init(shard int,StoreChanBufLen int,dbPathForwardIndex st
 }
 
 // getDocId 从 KeywordIndices 中得到第i个文档的 DocId
-func (indexer *Indexer) getDocId(ti *KeywordIndices, i int) string {
+func (indexer *Indexer) getDocId(ti *KeywordIndices, i int) uint64 {
 	return ti.docIds[i]
 }
 
 // HasDoc doc is exist return true
 //a
-func (indexer *Indexer) HasDoc(docId string) bool {
+func (indexer *Indexer) HasDoc(docId uint64) bool {
 	indexer.tableLock.RLock()
 	defer indexer.tableLock.RUnlock()
 	docState, ok := indexer.tableLock.docsState[docId]
@@ -242,7 +242,7 @@ func (indexer *Indexer) AddDocToCache(doc *types.DocIndex, forceUpdate bool) {
 		}
 
 		indexer.tableLock.Unlock()
-		if indexer.RemoveDocToCache("0", forceUpdate) {
+		if indexer.RemoveDocToCache(0, forceUpdate) {
 			// 只有当存在于索引表中的文档已被删除，其才可以重新加入到索引表中
 			position = 0
 		}
@@ -328,7 +328,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 					ti.frequencies = []float32{keyword.Frequency}
 				}
 
-				ti.docIds = []string{doc.DocId}
+				ti.docIds = []uint64{doc.DocId}
 				indexer.tableLock.table[keyword.Text] = &ti
 				continue
 			}
@@ -351,7 +351,7 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 				indices.frequencies[position] = keyword.Frequency
 			}
 
-			indices.docIds = append(indices.docIds, "0")
+			indices.docIds = append(indices.docIds, 0)
 			copy(indices.docIds[position+1:], indices.docIds[position:])
 			indices.docIds[position] = doc.DocId
 
@@ -387,13 +387,13 @@ func (indexer *Indexer) AddDocs(docs *types.DocsIndex) {
 // RemoveDocToCache 向 REMOVECACHE 中加入一个待删除文档
 // 返回值表示文档是否在索引表中被删除
 //c a
-func (indexer *Indexer) RemoveDocToCache(docId string, forceUpdate bool) bool {
+func (indexer *Indexer) RemoveDocToCache(docId uint64, forceUpdate bool) bool {
 	if indexer.initialized == false {
 		types.Logrus.Fatal("The Indexer has not been initialized.")
 	}
 
 	indexer.removeCacheLock.Lock()
-	if docId != "0" {
+	if docId != 0 {
 		indexer.tableLock.Lock()
 		docState, ok := indexer.tableLock.docsState[docId]
 		if ok && docState == 0 {
@@ -543,7 +543,7 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 // 当 docIds 不为 nil 时仅从 docIds 指定的文档中查找
 //a
 func (indexer *Indexer) Lookup(
-	tokens, labels []string, docIds map[string]bool, countDocsOnly bool, distScoreCriteria distscore.DistScoreCriteria,
+	tokens, labels []string, docIds map[uint64]bool, countDocsOnly bool, distScoreCriteria distscore.DistScoreCriteria,
 	geoFilter geofilter.GeoFilterCriteria,orderReverse bool) (scoredIDs []*types.ScoredID, numDocs int) {
 
 	if indexer.initialized == false {
@@ -575,7 +575,7 @@ func (indexer *Indexer) Lookup(
 }
 //a
 func (indexer *Indexer) internalLookup(
-	keywords, tokens []string, docIds map[string]bool, countDocsOnly bool,distScoreCriteria distscore.DistScoreCriteria,
+	keywords, tokens []string, docIds map[uint64]bool, countDocsOnly bool,distScoreCriteria distscore.DistScoreCriteria,
 	geoFilter geofilter.GeoFilterCriteria,orderReverse bool) (docs []*types.ScoredID, numDocs int) {
 
 	table := make([]*KeywordIndices, len(keywords))
@@ -743,7 +743,7 @@ func (indexer *Indexer) internalLookup(
 // 第一个返回参数为找到的位置或需要插入的位置
 // 第二个返回参数标明是否找到
 func (indexer *Indexer) searchIndex(indices *KeywordIndices,
-	start int, end int, docId string) (int, bool) {
+	start int, end int, docId uint64) (int, bool) {
 	// 特殊情况
 	if indexer.getIndexLen(indices) == start {
 		return start, false
@@ -869,7 +869,7 @@ func computeTokenProximity(table []*KeywordIndices,
 
 // 在逻辑与反向表中对docid进行查找, 若每个反向表都找到,
 // 则返回 true, 有一个找不到则返回 false
-func (indexer *Indexer) findInMustTable(table []*KeywordIndices, docId string) bool {
+func (indexer *Indexer) findInMustTable(table []*KeywordIndices, docId uint64) bool {
 	for i := 0; i < len(table); i++ {
 		_, foundDocId := indexer.searchIndex(
 			table[i], 0, indexer.getIndexLen(table[i])-1, docId)
@@ -885,7 +885,7 @@ func (indexer *Indexer) findInMustTable(table []*KeywordIndices, docId string) b
 // 在逻辑或反向表中对 docid 进行查找， 若有一个找到则返回 true,
 // 都找不到则返回 false
 // 如果 table 为空， 则返回 true
-func (indexer *Indexer) findInShouldTable(table []*KeywordIndices, docId string) bool {
+func (indexer *Indexer) findInShouldTable(table []*KeywordIndices, docId uint64) bool {
 	for i := 0; i < len(table); i++ {
 		_, foundDocId := indexer.searchIndex(
 			table[i], 0, indexer.getIndexLen(table[i])-1, docId)
@@ -905,7 +905,7 @@ func (indexer *Indexer) findInShouldTable(table []*KeywordIndices, docId string)
 // findInNotInTable 在逻辑非反向表中对 docid 进行查找,
 // 若有一个找到则返回 true, 都找不到则返回 false
 // 如果 table 为空, 则返回 false
-func (indexer *Indexer) findInNotInTable(table []*KeywordIndices, docId string) bool {
+func (indexer *Indexer) findInNotInTable(table []*KeywordIndices, docId uint64) bool {
 	for i := 0; i < len(table); i++ {
 		_, foundDocId := indexer.searchIndex(
 			table[i], 0, indexer.getIndexLen(table[i])-1, docId)
@@ -924,7 +924,7 @@ func (indexer *Indexer) findInNotInTable(table []*KeywordIndices, docId string) 
 func (indexer *Indexer) unionTable(table []*KeywordIndices,
 	notInTable []*KeywordIndices, countDocsOnly bool) (
 	docs []types.IndexedDoc, numDocs int) {
-	docIds := make([]string, 0)
+	docIds := make([]uint64, 0)
 	// 求并集
 	for i := 0; i < len(table); i++ {
 		for _, docid := range table[i].docIds {

@@ -31,7 +31,7 @@ type indexerLookupReq struct {
 	tokens        []string
 	labels        []string
 
-	docIds           map[string]bool
+	docIds           map[uint64]bool
 	orderReverse     bool
 	disScoreCriteria distscore.DistScoreCriteria
 	geoFilter        geofilter.GeoFilterCriteria
@@ -40,7 +40,7 @@ type indexerLookupReq struct {
 }
 
 type indexerRemoveDocReq struct {
-	docId       string
+	docId       uint64
 	forceUpdate bool
 }
 

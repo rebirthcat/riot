@@ -23,7 +23,7 @@ package types
 //使用分词器将用户传入的数据处理得到的即将传入索引器索引的结构
 type DocIndex struct {
 	// DocId 文本的 DocId
-	DocId string
+	DocId uint64
 
 	// TokenLen 文本的关键词长
 	TokenLen float32
@@ -57,7 +57,7 @@ type KeywordIndex struct {
 // IndexedDoc 索引器返回结果
 type IndexedDoc struct {
 	// DocId document id
-	DocId string
+	DocId uint64
 
 	// BM25，仅当索引类型为 FrequenciesIndex 或者 LocsIndex 时返回有效值
 	BM25 float32
@@ -108,7 +108,7 @@ func (docs DocsIndex) Less(i, j int) bool {
 
 // DocsId 方便批量删除文档索引
 // type DocsId []uint64
-type DocsId []string
+type DocsId []uint64
 
 func (docs DocsId) Len() int {
 	return len(docs)

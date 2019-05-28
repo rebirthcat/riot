@@ -3,6 +3,7 @@ package core
 import (
 	"github.com/rebirthcat/riot/store"
 	"github.com/rebirthcat/riot/types"
+	"strconv"
 	"sync"
 )
 
@@ -11,7 +12,7 @@ import (
 
 
 type StoreForwardIndexReq struct {
-	DocID string
+	DocID uint64
 	Remove bool
 	Field *DocField
 }
@@ -56,7 +57,12 @@ func (indexer *Indexer)StoreRecoverForwardIndex(docNumber uint64, wg *sync.WaitG
 		types.Logrus.Fatalf("indexer %v dbforward is not open",indexer.shardNumber)
 	}
 	indexer.dbforwardIndex.ForEach(func(k, v []byte) error {
-		docID := string(k)
+		docID,err:=strconv.ParseUint(string(k),10,64)
+		if err != nil {
+			//log
+			return nil
+		}
+		//docID := string(k)
 		indexer.tableLock.docsState[docID]=0
 		field:=&DocField{}
 		field.Unmarshal(v)
@@ -101,7 +107,7 @@ func (indexer *Indexer)StoreForwardIndexOneTime(wg *sync.WaitGroup)  {
 	for docId,docField:=range indexer.tableLock.forwardtable{
 
 		buf,_:=docField.Marshal(nil)
-		indexer.dbforwardIndex.Set([]byte(docId), buf)
+		indexer.dbforwardIndex.Set([]byte(strconv.FormatUint(docId,10)), buf)
 		//atomic.AddUint64(&indexer.numDocsStore, 1)
 	}
 	if wg!=nil {
@@ -137,11 +143,11 @@ func (indexer *Indexer)StoreUpdateForWardIndexWorker()  {
 	 	request := <-indexer.storeUpdateForwardIndexChan
 	 	//如果传过来的持久化请求中的DocTokenLen小于0,则是删除请求，即从RemoveDocs（）函数中传过来的
 	 	if request.Remove {
-	 		indexer.dbforwardIndex.Delete([]byte(request.DocID))
+	 		indexer.dbforwardIndex.Delete([]byte(strconv.FormatUint(request.DocID,10)))
 	 		continue
 	 	}else {
 			buf,_:=request.Field.Marshal(nil)
-			indexer.dbforwardIndex.Set([]byte(request.DocID), buf)
+			indexer.dbforwardIndex.Set([]byte(strconv.FormatUint(request.DocID,10)), buf)
 		}
 	}
 }

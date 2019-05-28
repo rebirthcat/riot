@@ -36,7 +36,7 @@ type SearchReq struct {
 
 
 	// 当不为 nil 时，仅从这些 DocIds 包含的键中搜索（忽略值）
-	DocIds map[string]bool
+	DocIds map[uint64]bool
 
 	// 自定义评分接口
 	//ScoringCriteria ScoringCriteria

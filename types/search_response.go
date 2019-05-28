@@ -57,7 +57,7 @@ type SearchID struct {
 
 // ScoredID scored doc only id
 type ScoredID struct {
-	DocId string
+	DocId uint64
 
 	//BM25 float32
 	// 文档的打分值
