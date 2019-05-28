@@ -468,7 +468,7 @@ func (indexer *Indexer) RemoveDocs(docs *types.DocsId) {
 		docsPointer := sort.Search(
 			len(*docs),
 			func(i int) bool {
-				if docs != nil || len(*docs) > 0 {
+				if docs != nil && *docs!=nil && len(*docs) > 0 {
 					return (*docs)[i] >= indices.docIds[0]
 				}else {
 					return false
